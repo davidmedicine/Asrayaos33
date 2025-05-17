@@ -1,0 +1,266 @@
+Think very hard You are a world class design and developer 
+Assigned To: Aethelstone Smith (Implementation AI)
+Ticket: ASR-225 – Presence Shelf & Integrated Multi-Panel Presence
+Date: 2025-04-19
+Revision Date: 2025-04-25 (v10 – FINAL Incorporating Final Review & Polish)
+Based On Feedback Received: [Link to or reference for the v10 final feedback summary provided]
+You will leverage tailwind 4.0  	asrayaos8.4/src/app/docs/tailwind4.0.md - asrayaos8.4/src/lib/motiontokens.ts
+asrayaos8.4/src/styles/globals.css
+Preamble: This v10 directive represents the final, production-ready plan for implementing the Presence Shelf feature. It incorporates all prior feedback (v9) and the final round of polish and clarification requests, addressing performance, accessibility, race conditions, GSAP integration, developer experience, and documentation accuracy. The plan is deemed sufficiently detailed for the implementation AI to proceed confidently towards a Pull Request with minimal need for further clarification during development.
+Quick delta from v9
+Adds citations to Supabase/GSAP etc., clarifies 23505 handling, links sample Supabase chat code as developer reference, implements Map serialisation helpers, pins eslint‑plugin‑import version, and embeds a Playwright forced‑colors test requirement. Everything else unchanged.
+1. Objective
+Implement a real-time “Presence Shelf” and integrate presence indicators across the chat UI panels. This final version (v10) solidifies all requirements with a focus on:
+Optimizing performance at scale: Throttled presence diffing (7-10s via reusable helper), efficient Map-based storage, minimal presence payloads, heuristic diff cap (PRESENCE_DIFF_SCAN_LIMIT, value exported and documented in ADR, with dev-mode miss tracking), minimal typing payloads.
+Hardening accessibility: Correct forced-colors handling (outline-style: auto with outline-offset verified on key platforms, forced-color-adjust: none), :focus-visible consistency, correct tabIndex usage on non-focusable Tooltip triggers, keyboardability, Axe checks in CI (with local script supporting CSV reporter), ARIA role validation (list/listitem context awareness).
+Ensuring robust error/race-condition handling: Postgres UNIQUE constraint (error code 23505 or constraint name match) handling for preventing duplicate DM creation races, ensuring fetched existing DMs respect RLS via re-SELECT pattern.
+Guaranteeing safe & adaptive GSAP integration: Central plugin registration, dev warning disablement, gsap.context() with ctx.revert() cleanup (verified listener removal, unit tested), dynamic adaptation using visibilitychange, pointerenter/leave (with touch device fallback, verified listener removal), and prefers-reduced-motion media query (linking directly to GSAP docs, unit tested), using paused() state instead of kill/create, SSR/worker guards, verified ref cleanup.
+Preventing architectural issues: Decoupled stores, correct dependency imports (zustand/traditional stability documented, including Next.js <13.4 /cjs note, with dynamic import fallback), linting for circular dependencies (eslint-plugin-import/no-cycle with ignore guidance, pinned version), barrel export for shared types (PresenceKind).
+Ensuring data integrity: Configurable ghost user removal (90s default, buffer rationale documented in ADR and .env.example), implemented Map serialization helpers (mapToJson/jsonToMap) for future persistence.
+Improving developer experience: Documented env vars (NEXT_PUBLIC_PRESENCE_EXPIRY, NEXT_PUBLIC_PRESENCE_DIFF_SCAN_LIMIT), conditional Axe testing (CI only + local script w/ CSV option, recipe link), clear Next.js version/build notes, documented Zustand import path quirk, eslint-plugin-import/no-cycle for early feedback, implemented Map serialization helpers, linked Supabase sample code for reference.
+Ensuring accurate documentation: ADR links, .env.example updates with rationale, inline comments clarifying heuristics/choices/nuances (Supabase heartbeat, outline-offset support), direct link to GSAP prefers-reduced-motion guidance.
+2. Success Criteria
+Functionality
+Presence Shelf/indicators use single Map-based presenceSlice.
+Presence tracked via throttled (7–10s) helper; minimal payload. Presence channel usage acceptable; typing broadcast usage minimal.
+Typing events handled via decoupled typingSlice; minimal payload.
+DM creation race-proof (DB UNIQUE constraint dmKey, try/catch 23505 / constraint name, re-SELECT respects RLS).
+Ghost users handled via Supabase eviction (~60s), aligned with NEXT_PUBLIC_PRESENCE_EXPIRY (90s default, rationale clear).
+
+
+Animation (GSAP)
+Safe central registration, respects user settings (SSR, prefers-reduced-motion).
+gsap.context() + ctx.revert() prevents leaks (unit tested); ScrollSmoother instance nulled. Event listeners confirmed removed within revert.
+Dev trial warnings disabled.
+Adapts dynamically (visibilitychange, pointer events w/ touch fallback, prefers-reduced-motion - unit tested) using paused().
+Instance stored in useRef.
+
+
+Realtime & Performance
+Performant Map-based Zustand store populated by Supabase Presence.
+Optimized diffing (size check, heuristic cap PRESENCE_DIFF_SCAN_LIMIT with dev warning for misses).
+Scalable >5k updates; worst-case O(n) acknowledged.
+Stable, memoized selectors (useCallback, createSelector from zustand/traditional via safe import).
+createSelector path documented (traditional vs cjs for Next <13.4).
+
+
+Quality & Accessibility
+Passes types, linting (import/no-cycle configured, pinned version). Unit/integration tests pass.
+Performance tests named *.perf.test.ts and run conditionally in CI.
+No visual regressions; Chromatic baseline approved (forced-colors). No Axe violations (CI check + local script w/ CSV report option, documented recipe).
+Presence indicators visible/focusable in HC modes (outline-style: auto, outline-offset visually verified on Win HC & macOS Increased Contrast, support matrix noted). forced-color-adjust: none used consciously.
+Tooltip triggers keyboard-accessible (tabIndex=0 logic correct per Radix, verified via .a11y.stories).
+AvatarStack roles (list/listitem) used correctly without invalid nesting.
+E2E tests verify focus, forced-colors (page.emulateMedia + screenshot), DM race handling (23505/constraint name + RLS check), avatar semantics, Tooltip focusability.
+
+
+Code Standards & DX
+GSAP registered safely with env guards.
+Minimal payloads used. dmKey constraint present.
+ADR documents rationale (expiry buffer, diff heuristic), limitations (Map serialization helpers implemented), nuances (Supabase expiry, outline-offset). Bot presence TBD.
+Shared helpers extracted (throttle w/ SSR guard verified). PresenceKind exported via barrel file.
+SSR checks (typeof window, etc.).
+Conventional Commits enforced (CI).
+mapToJson/jsonToMap utilities implemented.
+Supabase sample code linked for developer reference.
+
+
+3. Implementation Approach
+Overview
+Implement using decoupled presenceSlice (Map) and typingSlice. Incorporate all v10 polish: refined 23505 catch, GSAP context/reduced-motion unit tests, Storybook a11y test, Playwright screenshot, outline-offset comment, dynamic createSelector import, pinned linter version, Axe recipe link, implemented Map helpers, Supabase heartbeat comment & reference link.
+
+
+Realtime & Performance
+Map-based Presence Storage: Use Map<string, OnlineFriend>. Implement mapToJson/jsonToMap helpers in serializationHelpers.ts based on standard patterns (Stack Overflow Pattern Citation). Comment in slice refers to these helpers.
+Optimized Diffing: Use PRESENCE_DIFF_SCAN_LIMIT (imported constant). Add dev warning for misses. Export constant from realtimeHelpers.ts. Document value in ADR.
+Throttled Presence Tracking: Use SSR-safe helper. Verify Lodash throttle SSR safety (Date.now).
+Ghost User Expiry: Align understanding with NEXT_PUBLIC_PRESENCE_EXPIRY (90s); document rationale clearly in .env.example and ADR. Add comment in useRealtimePresence.ts referencing Supabase's 30s heartbeat / 2-miss expiry window (Supabase Presence Docs Citation). NEW in v10
+Minimal Payloads: For presence and typing.
+Memoized Selectors: Use zustand/traditional. Implement build-time safe import (e.g., try/catch dynamic import) for createSelector to handle potential CJS/ESM issues in older bundlers. (MDN Dynamic Import Citation). NEW in v10
+
+
+Quality & Accessibility
+Accessibility Checks:
+forced-colors: CSS class with outline-style: auto, outline-offset: 1px, forced-color-adjust: none. Visually check outline-offset on Win HC & macOS Increased Contrast. Add comment about support matrix (CanIUse/MDN Citation for outline-offset). NEW in v10
+Keyboard Nav: Tooltip.Trigger + asChild + tabIndex="0" logic per Radix (Radix Tooltip Docs Citation). Add .a11y.stories.tsx for OnlineFriendChip. NEW in v10
+Axe tests: Conditional CI check + local script pnpm run test:a11y -- --reporter csv. Document setup/recipe in docs/testing/a11y.md linking to Axe/Playwright integration examples (Axe-Core Playwright Citation). NEW in v10
+ARIA Roles: AvatarStack roles correct, no invalid nesting.
+
+
+Error Handling: DM creation uses DB UNIQUE constraint on dmKey, caught via try/catch checking error.code === '23505' || error.constraint?.includes('dm_key'). Re-SELECT existing channel respecting RLS (Postgres Error Codes Citation, [Playwright Constraint Handling Example Citation - if applicable, otherwise cite generic DB error handling best practice]). NEW in v10
+Linting: Enable import/no-cycle. Pin eslint-plugin-import to 2.28.1 (Rationale/Blog Post Citation e.g., Ben Myers). Consider .eslintignore. NEW in v10
+
+
+Code Standards & DX
+Conventional Commits: Enforced in CI.
+GSAP: Safe registration. Add unit test for gsap.context/ctx.revert usage in gsapHelpers.test.ts (GSAP React Guide Citation). NEW in v10 Add unit test mocking matchMedia for prefers-reduced-motion checks (GSAP Prefers Reduced Motion Docs Citation). NEW in v10
+Env Guards: Standard SSR checks.
+Type Export: Export PresenceKind via src/types/index.ts.
+Serialization Helpers: Implement mapToJson/jsonToMap based on cited pattern.
+Developer Reference: Link to Supabase sample code (realtime-chat.jsx, etc.) in /examples dir or docs for onboarding. NEW in v10
+
+
+Technical Notes & Documentation
+GSAP ScrollSmoother: Use useRef, paused(), gsap.context(), adaptive listeners (touch fallback). Verify pointer/visibility listeners removed within ctx.revert(). Document pattern in gsap-integration.mdx with direct link to GSAP prefers-reduced-motion guidance (GSAP ScrollSmoother prefers-reduced-motion Citation).
+Map Serialization: Implemented helpers in src/lib/utils/serializationHelpers.ts.
+
+
+4. File-by-File Implementation Plan (Incorporating v10 Additions)
+docs/adr/00X-presence-state-map.md
+Update: Document DEFAULT_PRESENCE_DIFF_SCAN_LIMIT value. Reference implemented mapToJson/jsonToMap helpers. Refine 90s expiry rationale (buffer > ~60s Supabase default).
+
+
+
+
+
+
+.eslintrc.js
+Enable: import/no-cycle. Add comment re: .eslintignore.
+
+
+src/types/index.ts 
+add: Barrel export: export * from './presence';
+
+
+src/types/presence.ts
+Define: PresenceKind, OnlineFriend, TypingPayload, LeanPresencePayload. Add Comment: // Exported via src/types/index.ts
+
+
+src/lib/utils/realtimeHelpers.ts
+Export: export const DEFAULT_PRESENCE_DIFF_SCAN_LIMIT = 2000;
+Create/Update: createThrottledPresenceTracker (verify Lodash SSR safety), handleIncomingTypingEvent, convertSupabasePresenceStateToMap.
+
+
+src/lib/utils/serializationHelpers.ts (New or Update)
+Implement: Functions mapToJson and jsonToMap based on cited pattern (Stack Overflow Pattern Citation). NEW in v10
+
+
+src/lib/state/store.ts (or where createSelector is imported/used)
+Implement: Safe dynamic import fallback for createSelector from zustand/traditional vs zustand/traditional/cjs. NEW in v10
+Example Snippet:
+// Example: Adjust based on actual usage context
+let createSelector;
+try {
+  // Prefer ESM build
+  const zustandTraditional = await import('zustand/traditional');
+  createSelector = zustandTraditional.createSelector;
+} catch (e) {
+  console.warn('Falling back to zustand/traditional/cjs for createSelector');
+  // Fallback for older bundlers/Next.js versions
+  const zustandTraditionalCjs = await import('zustand/traditional/cjs');
+  createSelector = zustandTraditionalCjs.createSelector;
+}
+// Now use 'createSelector' variable
+content_copy
+download
+Use code with caution.JavaScript
+
+
+
+
+src/lib/state/slices/presenceSlice.ts
+Import: import { PresenceKind } from '@/types';
+Import: import { DEFAULT_PRESENCE_DIFF_SCAN_LIMIT } from '@/lib/utils/realtimeHelpers';
+Import: import { mapToJson, jsonToMap } from '@/lib/utils/serializationHelpers';
+Update Comment: // Map not JSON serializable natively; using mapToJson/jsonToMap helpers for potential persistence.
+Use Env Var/Default: const limit = parseInt(process.env.NEXT_PUBLIC_PRESENCE_DIFF_SCAN_LIMIT || String(DEFAULT_PRESENCE_DIFF_SCAN_LIMIT), 10);
+Add Dev Warning: Include diff limit miss warning.
+
+
+src/features/chat/hooks/useRealtimePresence.ts
+Add Comment: // Supabase Presence default heartbeat: 30s. Client considered offline after 2 missed heartbeats (~60s). Ref: [Supabase Presence Docs Link] NEW in v10
+
+
+src/server/actions/chatActions.ts
+Change: Wrap DB call, catch block condition: if (error.code === '23505' || error.constraint?.includes('dm_key')) { /* handle */ }. Re-SELECT existing DM respecting RLS. NEW in v10
+
+
+src/components/ui/OnlineFriendChip.tsx
+Change: Radix Tooltip.Trigger + asChild + tabIndex="0" logic. Apply presence-dot-outline class.
+
+
+src/components/ui/OnlineFriendChip.a11y.stories.tsx (New)
+Create: Story specifically for testing Tooltip trigger accessibility with focusable/non-focusable children, referencing Radix guidance. NEW in v10
+
+
+src/features/chat/components/OnlineFriendsShelf.tsx
+Change: GSAP via gsap.context. Adaptive listeners + touch fallback.
+Add Verification Note: // REVIEW: Ensure pointer/visibility listeners are removed within ctx.revert()
+
+
+src/lib/motion/gsapHelpers.test.ts (New)
+Create: Unit tests verifying gsap.context() pattern calls ctx.revert() on cleanup. Unit test mocking matchMedia to verify prefers-reduced-motion logic. NEW in v10
+
+
+src/styles/global.css
+Change: @media (forced-colors: active) { .presence-dot-outline { ... outline-offset: 1px; ... } }
+Add Comment: /* outline-offset support varies, test on Win HC/macOS IC. Ref: [MDN/CanIUse Link] */ NEW in v10
+
+
+src/app/docs/motion/gsap-integration.mdx
+Update: Document GSAP patterns. Add Direct Link: Include link to ScrollSmoother prefers-reduced-motion section within GSAP docs.
+
+
+docs/testing/a11y.md (New or Existing)
+Add/Update: Document local Axe testing script (pnpm run test:a11y -- --reporter csv). Link to Axe+Playwright integration recipe/docs. NEW in v10
+
+
+/examples (New Directory or existing docs location)
+Add/Link: Supabase sample code (realtime-chat.jsx, use-realtime-chat.jsx, avatar-stack.jsx) as developer reference/onboarding material. NEW in v10
+
+
+.env.example
+Update: NEXT_PUBLIC_PRESENCE_EXPIRY=90000 # 90s: Safe buffer over Supabase's ~60s (2 missed 30s heartbeats) presence eviction.
+Add: NEXT_PUBLIC_PRESENCE_DIFF_SCAN_LIMIT=2000 # Max presence entries shallow-compare heuristic (see DEFAULT_PRESENCE_DIFF_SCAN_LIMIT in realtimeHelpers.ts)
+
+
+husky/commit-msg (or CI config)
+Confirm: Enforces Conventional Commits in CI.
+
+
+
+
+Performance Tests:
+Naming: *.perf.test.ts
+CI: Run conditionally (RUN_PERF_TESTS=true). Test high volume updates.
+
+
+Integration Tests: Store decoupling. DM creation 23505/constraint name handling + RLS check.
+Storybook:
+Chromatic baseline (forced-colors).
+OnlineFriendChip tabIndex stories.
+NEW in v10: OnlineFriendChip.a11y.stories.tsx: Focused accessibility tests using @storybook/addon-a11y.
+
+
+6. Developer Environment Notes
+Environment Variables: As documented in .env.example with rationales.
+Environment Guards: Standard SSR checks.
+Next.js Compatibility: Note zustand/traditional[/cjs] requirement & safe import pattern. Add Note: If import { createSelector } from 'zustand/traditional' fails directly in older Next.js builds even with dynamic import attempts in the store, the ultimate fallback is explicitly using the 'zustand/traditional/cjs' path in the import statement within those specific environments. (MDN Modules Citation). NEW in v10
+Local Testing:
+Run Axe: pnpm run test:a11y (list) or pnpm run test:a11y -- --reporter csv.
+Verify Husky hook. Observe presence diff dev warnings.
+Reference /examples Supabase code for basic setup understanding.
+
+
+CI: Ensure commit linting. Conditional Axe & Perf tests (CI=true, RUN_PERF_TESTS=true).
+7. Definition of Done Recap
+Presence implemented; throttled updates; buffered expiry; separate typing.
+Map store; optimized diff (heuristic cap + dev warning, value exported).
+Accessibility: Correct forced-colors (outline-offset verified, screenshot), tabIndex (a11y story added), Axe pass (CI + local CSV option, recipe linked), ARIA roles checked.
+DM race-proof (UNIQUE + try/catch 23505/constraint name + RLS check).
+GSAP: Safe registration, context/revert (unit tested), adaptive (paused(), touch fallback, reduced-motion unit tested), cleanup verified.
+Linting passes (import/no-cycle, pinned version). All tests pass (Axe/Perf conditionally). PresenceKind uses barrel export.
+Conventional Commits enforced.
+Map serialization helpers implemented.
+Documentation updated (ADR, .env.example rationale, inline comments, Supabase heartbeat/ref, GSAP links, Axe recipe). Supabase example code linked.
+PR created referencing ASR-225, confirming v10 final plan integration.
+Merged behind CHAT_PRESENCE_V2 feature flag.
+8. Final Delivery
+The linked Supabase sample code snippets (realtime-chat.jsx, use-realtime-chat.jsx, avatar-stack.jsx, etc.) located in the /examples directory serve as a practical, minimal reference for developers onboarding to this feature area. They illustrate:
+Basic Supabase "broadcast" usage: Demonstrates sending/receiving messages via Supabase channels, distinct from the more complex "presence" feature implemented here. This provides a simpler starting point for understanding Supabase Realtime fundamentals.
+Core UI patterns: Shows a basic implementation of an avatar stack, aligning conceptually with the Presence Shelf's visual representation.
+Note: This sample code should not be copied directly into the production codebase. Its purpose is strictly educational and for local experimentation to understand fundamental Supabase Realtime interactions without the complexity of the full application state management, presence diffing, and GSAP integration.
+Looking forward to what you build
+
+
+

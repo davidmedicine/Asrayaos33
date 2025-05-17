@@ -1,0 +1,765 @@
+/**
+ * globals.css
+ *
+ * Root stylesheet for the application.
+ * Imports Tailwind base, components, utilities, and plugins.
+ * Defines CSS custom properties (@theme for Tailwind, :root for general use).
+ * Includes base element styles, component patterns, and custom utilities.
+ *
+ * ========================================================================
+ * CRITICAL TAILWIND V4 DEVELOPMENT NOTE:
+ * DO NOT @apply custom CSS class names defined in this file (e.g., `.glass-panel`).
+ * Only use official Tailwind utility classes within `@apply`.
+ * Attempting to `@apply` a custom class will result in a build error:
+ * `error - Unknown utility: your-custom-class-name`
+ * Define reusable custom components using raw CSS properties within `@layer components`.
+ * Reference: https://tailwindcss.com/docs/functions-and-directives#apply
+ * ========================================================================
+ *
+ * IMPORTANT (Tailwind Arbitrary Values):
+ * Avoid defining CSS rules with selectors that directly use Tailwind's arbitrary value
+ * syntax containing brackets `[]` and parentheses `()`, like `.h-\[var\(--my-var\)\]`.
+ * This syntax is invalid in standard CSS and will break PostCSS/Turbopack parsing.
+ *
+ * Arbitrary value classes (e.g., "h-[100px]", "text-[var(--my-color)]") should ONLY be
+ * used directly within your HTML/JSX templates.
+ *
+ * If you need a reusable style based on a CSS variable that would mimic an
+ * arbitrary value class, define a standard CSS class within `@layer utilities`
+ * and use Tailwind's `@apply` directive with the appropriate syntax, e.g.:
+ * .my-utility { @apply h-(--my-css-variable); }
+ * .my-color-utility { @apply text-[color:var(--my-css-variable)]; }
+ */
+
+/* ========================================
+   1. Imports & Setup
+   ======================================== */
+
+/* Potentially gate this import based on prefers-reduced-motion for optimization */
+@import "./animations.css"; /* registers @property for GSAP */
+
+/* Tailwind Import MUST come before @plugin directives */
+@import "tailwindcss";
+
+/* Tailwindcss-logical plugin - MUST also be required in tailwind.config.js/mjs */
+@plugin "tailwindcss-logical";
+
+/* Potentially gate this import based on prefers-reduced-motion for optimization */
+@import "./presence.css";
+
+/*
+   RECOMMENDED FONT HANDLING:
+   Use <link rel="preconnect"> and <link rel="stylesheet"> in your HTML <head>
+   for Google Fonts or other web fonts instead of @import here.
+*/
+
+/* ========================================
+   1a. Tailwind Theme Registration (@theme)
+      - Define CSS variables here that Tailwind should use to generate utilities.
+      - This is the primary way to configure the theme in Tailwind v4 CSS.
+   ======================================== */
+@theme {
+  /* Font stacks registered here generate .font-body, .font-display, .font-mono utilities */
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-display: "Satoshi", "Inter", system-ui, sans-serif;
+  --font-mono: "Fira Code", "JetBrains Mono", monospace;
+
+  /* ---- Asraya Aethelstone Codex Palette - OKLCH ---- */
+  /* Specific color shades defined here will generate Tailwind color utilities (e.g., bg-slate-deep-950) */
+  --color-slate-deep-950: oklch(16% 0.01 250);
+  --color-slate-surface-900: oklch(23% 0.015 250);
+  --color-mineral-gray-700: oklch(36% 0.01 245);
+  --color-mineral-gray-600: oklch(46% 0.01 245);
+  --color-starlight-300: oklch(75% 0.005 70);
+  --color-starlight-100: oklch(98% 0.002 70);
+  --color-wisdom-indigo-500: oklch(48% 0.16 270);
+  --color-wisdom-indigo-400: oklch(55% 0.18 270);
+  --color-wisdom-indigo-600: oklch(42% 0.14 270);
+  --color-create-magenta-500: oklch(58% 0.24 320);
+  --color-create-magenta-400: oklch(63% 0.25 320);
+  --color-create-magenta-600: oklch(53% 0.23 320);
+  --color-value-amber-500: oklch(78% 0.15 88);
+  --color-value-amber-400: oklch(83% 0.16 88);
+  --color-value-amber-600: oklch(72% 0.14 88);
+  --color-success-green-500: oklch(68% 0.18 145);
+  --color-warning-amber-500: oklch(75% 0.16 75);
+  --color-danger-red-500: oklch(62% 0.23 28);
+  --color-info-cyan-500: oklch(70% 0.14 200);
+
+  /* ---- Shadows ---- */
+  /* Note: --shadow-l1 is defined in :root as it's used directly, not generating a utility */
+  --shadow-subtle: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.25);
+  --shadow-medium: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.35);
+  --shadow-depth: 0 1.5rem 3rem rgba(0, 0, 0, 0.45);
+  --shadow-inset-sm: inset 0 0.125rem 0.25rem rgba(0,0,0, 0.35);
+  --shadow-inset-md: inset 0 0.25rem 0.5rem rgba(0,0,0, 0.45);
+
+  /* ---- Animation Durations & Easings ---- */
+  --duration-fastest: 0.1s;
+  --duration-fast: 0.2s;
+  --duration-normal: 0.3s;
+  --duration-slow: 0.5s;
+  --duration-slower: 0.8s;
+  --duration-slowest: 1.2s;
+  --ease-default: ease-out;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-elastic: cubic-bezier(0.5, 1.5, 0.75, 1.25);
+  --ease-bounce: cubic-bezier(0.5, -0.5, 0.1, 1.5);
+  --ease-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-organic: cubic-bezier(0.43, 0.11, 0.37, 0.85);
+
+  /* ---- Z-Index Scale ---- */
+  --z-below: -1;
+  --z-normal: 0;
+  --z-above: 10;
+  --z-header: 20;
+  --z-overlay: 30;
+  --z-modal: 40;
+  --z-toast: 50;
+  --z-tooltip: 60;
+}
+
+/* ========================================
+   1b. @property Definitions
+      (Register custom properties tweened by GSAP for performance)
+   ======================================== */
+/* Potentially gate these based on prefers-reduced-motion for optimization */
+@property --avatar-glow-alpha { syntax: "<number>"; inherits: false; initial-value: 0; }
+@property --avatar-glow-scale { syntax: "<number>"; inherits: false; initial-value: 1; }
+@property --sidebar-tilt { syntax: "<angle>"; inherits: true; initial-value: 0deg; }
+
+/* ========================================
+   2. CSS Layers - Base
+      - Place general CSS variables NOT directly generating Tailwind utilities here.
+      - Includes base element styles, themes, focus, etc.
+   ======================================== */
+@layer base {
+  :root {
+    /* Core Settings & Scales */
+    --radius: 0.625rem; /* Generic var for border-radius */
+    --spacing: 0.25rem;  /* Generic var for padding/margin, also used by v4 dynamic spacing utilities */
+    --anim-enable: 1; /* For reduced motion toggle (JS check) */
+
+    /* ---- NEW Depth Tokens ---- */
+    --panel-radius: 18px;
+    --panel-blur: 20px;
+    --shadow-l1: 0 0.5px 0.8px hsl(220 14% 8% / .08), 0 2px 4px hsl(220 14% 8% / .10), 0 6px 20px hsl(220 14% 8% / .08);
+    --panel-inner-stroke: inset 0 0 0 0.5px hsl(0 0% 100% / .06);
+
+    /* ---- Variables from original globals.css ---- */
+    --sidebar-width-expanded: 15rem;
+    --sidebar-width-minimized: 4.5rem;
+    --sidebar-height: 100dvh; /* Used by .sidebar-height utility */
+
+    /* ---- Focus Ring ---- */
+    --focus-ring-offset: 3px;
+    --focus-ring-width: 2px;
+    /* Default light theme focus color (WCAG AA on light) */
+    --focus-ring-color: var(--agent-color-primary); /* Default to agent color */
+
+    /* ---- Glow Effects ---- */
+    /* Custom complex variables for shadows, not directly mapping to Tailwind classes */
+    --glow-fire-medium: 0 0 12px 2px rgb(255 105 70 / .5);
+    --glow-primary-xs: 0 0 6px 1px color-mix(in oklch, var(--agent-color-primary) 40%, transparent);
+    --glow-wisdom-subtle: 0 0 8px 2px color-mix(in oklch, var(--color-wisdom-indigo-400) 35%, transparent);
+    --glow-wisdom-medium: 0 0 16px 4px color-mix(in oklch, var(--color-wisdom-indigo-400) 45%, transparent);
+    --glow-create-subtle: 0 0 8px 2px color-mix(in oklch, var(--color-create-magenta-400) 35%, transparent);
+    --glow-create-medium: 0 0 16px 4px color-mix(in oklch, var(--color-create-magenta-400) 45%, transparent);
+    --glow-value-subtle: 0 0 8px 2px color-mix(in oklch, var(--color-value-amber-400) 40%, transparent);
+    --glow-value-medium: 0 0 16px 4px color-mix(in oklch, var(--color-value-amber-400) 50%, transparent);
+
+    /* ---- Base Theme Variables (Agent Agnostic - Dark Default) ---- */
+    /* Composed variables used within components/base styles */
+    --bg-body: var(--color-slate-deep-950);
+    --bg-surface: var(--color-slate-surface-900);
+    --bg-subtle: var(--color-mineral-gray-700);
+    --bg-muted: var(--color-mineral-gray-600);
+    --bg-hover: var(--color-mineral-gray-600);
+    --text-default: var(--color-starlight-100);
+    --text-muted: var(--color-starlight-300);
+    --text-heading: var(--color-starlight-100);
+    --text-subtle: var(--color-starlight-300);
+    --border-default: var(--color-mineral-gray-600); /* Used by explicit borders */
+    --border-muted: var(--color-mineral-gray-700); /* Used by dividers etc. */
+    --agent-color-primary: var(--color-wisdom-indigo-500); /* Default agent */
+    --agent-color-secondary: var(--color-create-magenta-500); /* Default agent */
+    --agent-avatar-gradient: radial-gradient(circle, var(--bg-muted), var(--bg-subtle));
+  }
+
+  /* Dark theme overrides - Assumes html element gets class="dark" */
+  /* Current setup assumes dark is default; this is for potential light theme */
+  /* html:not(.dark) { ... } */
+  /* Example override if needed for light theme */
+  /* html:not(.dark) { --focus-ring-color: #005A9C; } */
+
+  /* Reduced Motion Preferences */
+  @media (prefers-reduced-motion: reduce) {
+    /* Override --anim-enable for potential JS checks */
+    :root {
+      --anim-enable: 0;
+    }
+    /* Globally disable animations and transitions */
+    *, ::before, ::after {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+      transition-delay: 0ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Base element styling */
+  :root {
+    /* Set default color scheme - affects browser UI like scrollbars */
+    color-scheme: dark;
+    /* Applies font generated from @theme --font-body */
+    @apply font-body;
+    -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    /* Uses base theme variables defined above */
+    @apply bg-[var(--bg-body)] text-[var(--text-default)];
+    min-height: 100dvh; width: 100%; overflow-x: hidden;
+    font-size: 1rem; line-height: 1.6; touch-action: manipulation;
+    /* Standard CSS transitions */
+    transition-property: background-color, color;
+    transition-duration: var(--duration-slow);
+    transition-timing-function: var(--ease-in-out);
+  }
+
+  /* Basic typography resets & defaults */
+  h1, h2, h3, h4, h5, h6 {
+    /* Applies font generated from @theme --font-display */
+    @apply font-display;
+    font-variation-settings: 'wght' 600; letter-spacing: -0.02em;
+    line-height: 1.2; margin-block: 0 1rem; /* Uses standard CSS logical property */
+    color: var(--text-heading);
+  }
+  /* Apply heading sizes via utilities in HTML */
+  h1 { @apply text-3xl; } h2 { @apply text-2xl; } h3 { @apply text-xl; }
+  h4 { @apply text-lg; } h5 { @apply text-base; } h6 { @apply text-base; }
+
+  p { margin-block-start: 0; @apply text-base max-sm:text-sm leading-[1.7] mb-4 text-[var(--text-default)]; } /* Uses standard CSS logical property */
+
+  /* Minimal form reset */
+  button, input, textarea, select { font: inherit; color: inherit; margin: 0; padding: 0; }
+  button { background: transparent none; border: none; cursor: pointer; text-align: inherit; }
+
+  /* V4 Reset Update: Set only box-sizing, borders are NOT reset globally */
+  *, ::before, ::after {
+    box-sizing: border-box;
+    /* border: 0 solid transparent; <-- REMOVED global border reset */
+  }
+
+  /* Base Agent Theme Definitions */
+  /* These override the CSS variables for specific themes */
+  .theme-oracle {
+    --agent-color-primary: var(--color-wisdom-indigo-500);
+    --agent-color-secondary: var(--color-wisdom-indigo-400);
+    --agent-avatar-gradient: radial-gradient( circle, color-mix(in oklch, var(--color-wisdom-indigo-500) 20%, var(--bg-muted)), color-mix(in oklch, var(--color-wisdom-indigo-400) 10%, var(--bg-subtle)) );
+    --focus-ring-color: var(--color-wisdom-indigo-500); /* Agent specific focus */
+  }
+  .theme-muse {
+    --agent-color-primary: var(--color-create-magenta-500);
+    --agent-color-secondary: var(--color-create-magenta-400);
+    --agent-avatar-gradient: radial-gradient( circle, color-mix(in oklch, var(--color-create-magenta-500) 20%, var(--bg-muted)), color-mix(in oklch, var(--color-create-magenta-400) 10%, var(--bg-subtle)) );
+    --focus-ring-color: var(--color-create-magenta-500); /* Agent specific focus */
+  }
+  /* Add other .theme-* definitions */
+
+  /* Accessibility focus styles using ring utilities (WCAG 2.2) */
+  /* This global rule applies the desired focus ring */
+  :focus-visible {
+    /* Uses ring variables for consistency */
+    @apply outline-none rounded-sm
+           ring-2 ring-offset-3 /* Corresponds to --focus-ring-width and --focus-ring-offset */
+           ring-[var(--agent-color-primary)] /* Use agent color for ring */
+           ring-offset-[var(--bg-body)]; /* Offset against main background */
+    /* Alternative using dedicated variables: */
+    /* @apply outline-none rounded-sm ring-[var(--focus-ring-width)] ring-offset-[var(--focus-ring-offset)] ring-[var(--focus-ring-color)] ring-offset-[var(--bg-body)]; */
+  }
+
+  /* Styling for invalid form fields */
+  input:invalid, textarea:invalid, select:invalid {
+    /* Assumes the input element itself has a border (e.g., .input-field adds one) */
+    @apply border-[var(--color-danger-red-500)] ring-1 ring-[var(--color-danger-red-500)];
+  }
+
+  /* Styling for aria-current */
+  [aria-current="page"], [aria-current="step"] {
+    @apply text-[var(--agent-color-primary)] font-semibold relative;
+    /* Optional underline: */
+    /* &::after { content: ''; @apply absolute bottom-[-0.25rem] left-0 w-full h-px bg-[var(--agent-color-primary)]; } */
+  }
+
+  /* Print styles */
+  @media print {
+    body { background: white; font-size: 12pt; color: black; }
+    .no-print { display: none !important; }
+    .page-break { page-break-before: always; }
+    .chat-message { break-inside: avoid; page-break-inside: avoid; }
+  }
+}
+
+/* ========================================
+   3. CSS Layers - Components
+   ======================================== */
+@layer components {
+  /* ---- Icons ---- */
+  .icon {
+    @apply inline-flex items-center justify-center relative;
+  }
+
+  /* ---- Buttons ---- */
+  /* Base button styles - NO border by default */
+  .btn {
+    @apply inline-flex items-center justify-center relative overflow-hidden select-none cursor-pointer
+           font-medium tracking-wider border-none; /* Explicitly no border */
+    transition-property: background-color, border-color, box-shadow, color, opacity, filter;
+    transition-duration: var(--duration-fast);
+    transition-timing-function: var(--ease-out);
+  }
+  .btn:hover:not(:disabled) { @apply brightness-110; }
+  .btn:active:not(:disabled) { @apply brightness-95; }
+  .btn:disabled { @apply opacity-50 cursor-not-allowed; }
+
+  .btn-primary {
+    @apply bg-[var(--agent-color-primary)] text-white shadow-sm;
+  }
+  .btn-primary:hover:not(:disabled) { @apply shadow-[var(--glow-primary-xs)]; }
+  .btn-primary:disabled { @apply bg-[var(--bg-subtle)] shadow-none; }
+
+  .btn-secondary {
+    /* Explicitly adds a border */
+    @apply bg-[var(--bg-subtle)] text-[var(--text-default)] border border-[var(--border-default)];
+  }
+  .btn-secondary:hover:not(:disabled) { @apply bg-[var(--bg-muted)]; }
+  .btn-secondary:disabled { @apply border-[var(--border-muted)]; }
+
+  /* Other button variants... ensure they manage borders explicitly if needed */
+  .btn-creative { @apply bg-[var(--color-create-magenta-500)] text-white shadow-sm border-none; }
+  .btn-creative:hover:not(:disabled) { @apply shadow-[var(--glow-create-medium)]; }
+  .btn-creative:disabled { @apply bg-[var(--bg-subtle)] shadow-none; }
+
+  .btn-value { @apply bg-[var(--color-value-amber-500)] text-black shadow-sm border-none; }
+  .btn-value:hover:not(:disabled) { @apply shadow-[var(--glow-value-medium)]; }
+  .btn-value:disabled { @apply bg-[var(--bg-subtle)] text-[var(--text-muted)] shadow-none; }
+
+  .btn-danger { @apply bg-[var(--color-danger-red-500)] text-white shadow-sm border-none; }
+  .btn-danger:hover:not(:disabled) { @apply shadow-[0_0_12px_color-mix(in_oklch,_var(--color-danger-red-500)_50%,_transparent)]; }
+  .btn-danger:disabled { @apply bg-[var(--bg-subtle)] shadow-none; }
+
+  .btn-ghost { @apply bg-transparent text-[var(--text-default)] shadow-none border-none; }
+  .btn-ghost:hover:not(:disabled) { @apply bg-white/5; }
+  .btn-ghost:active:not(:disabled) { @apply bg-white/10; }
+
+  /* ---- Form Elements ---- */
+  .input-field {
+    /* Explicitly adds a border */
+    @apply w-full bg-[var(--bg-subtle)] text-[var(--text-default)]
+           border border-[var(--border-muted)] shadow-[var(--shadow-inset-sm)];
+    transition-property: border-color, box-shadow;
+    transition-duration: var(--duration-normal);
+    transition-timing-function: var(--ease-out);
+  }
+  .input-field:focus {
+     /* Focus ring handled by global :focus-visible, just override border color */
+     @apply border-[var(--agent-color-primary)];
+  }
+  .input-field::placeholder { @apply text-[var(--text-muted)] opacity-70; }
+
+  .error-message { @apply text-[var(--color-danger-red-500)] text-xs mt-1; }
+
+  /* ---- Cards, Panels ---- */
+  .card {
+    /* Explicitly adds a border */
+    @apply overflow-hidden bg-[var(--bg-surface)] border border-[var(--border-muted)] shadow-[var(--shadow-medium)];
+    transition-property: background-color, border-color, box-shadow;
+    transition-duration: var(--duration-fast);
+    transition-timing-function: var(--ease-out);
+  }
+  .gsap-card-hover-target { transform-style: preserve-3d; perspective: 1000px; }
+
+  /* NEW: Glass Panel (Raw CSS) */
+  .glass-panel {
+    border-radius: var(--panel-radius);
+    background: color-mix(in oklch, var(--bg-surface) 45%, transparent);
+    backdrop-filter: blur(var(--panel-blur));
+    box-shadow: var(--shadow-l1);
+    overflow: hidden;
+    isolation: isolate; /* Create stacking context for pseudo-element */
+    position: relative; /* Needed for pseudo-element positioning */
+  }
+  .glass-panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit; /* Match parent border-radius */
+    /* Inner stroke using box-shadow */
+    box-shadow: var(--panel-inner-stroke);
+    /* Prevent pointer events on the pseudo-element */
+    pointer-events: none;
+  }
+
+  /* REWRITTEN: Panel (Uses @apply + Raw CSS ::before) */
+  .panel {
+    @apply flex flex-col rounded-[var(--panel-radius)] shadow-[var(--shadow-l1)] backdrop-blur-[var(--panel-blur)] bg-[color:var(--bg-surface)/.45];
+    /* Raw CSS for isolation and positioning needed for the ::before */
+    isolation: isolate;
+    position: relative;
+    overflow: hidden; /* Keep overflow hidden */
+    /* NOTE: No explicit border here, relying on the glass effect */
+  }
+  .panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: var(--panel-inner-stroke);
+    pointer-events: none;
+  }
+
+  /* Original glassmorphic class (kept for reference/potential use) */
+  .glassmorphic {
+    /* Explicitly adds a border */
+    @apply border border-[var(--border-muted)] shadow-[var(--shadow-subtle)];
+    @media (prefers-reduced-transparency: no-preference) {
+      @apply backdrop-blur-[10px] bg-[color:color-mix(in_oklch,_var(--bg-surface)_75%,_transparent)];
+    }
+    @media not (prefers-reduced-transparency: no-preference) {
+       @apply bg-[var(--bg-surface)];
+    }
+    @supports (not (backdrop-filter: blur(2px))) {
+       @apply bg-[var(--bg-surface)];
+    }
+  }
+
+  /* ---- Chat Elements ---- */
+  .gsap-flip-container { @apply relative; }
+
+  .chat-box {
+    /* No border needed at the top level */
+    @apply container min-h-dvh w-full overflow-hidden relative bg-[var(--bg-surface)] text-[var(--text-default)];
+  }
+
+  .chat-messages-container {
+    /* Use .custom-scrollbar in HTML */
+    @apply relative overflow-y-auto p-4 pb-28;
+    height: calc(100dvh - 6rem); /* Adjust as needed */
+  }
+
+  .chat-message {
+    /* No border */
+    @apply w-full max-w-3xl my-2 relative origin-bottom;
+    & .message-time {
+      @apply block mt-1 text-xs text-[var(--text-muted)] opacity-80;
+      transition-property: opacity;
+      transition-duration: 200ms;
+    }
+    &.user .message-time { @apply text-end; }
+    &.assistant .message-time { @apply text-start; }
+  }
+
+  .chat-bubble {
+    /* No border by default, variants add it */
+    @apply relative inline-block max-w-[90%] overflow-hidden text-left rounded-lg shadow-[var(--shadow-subtle)]
+           px-4 py-3 text-base max-sm:text-sm leading-relaxed border-none;
+    transition-property: background-color, border-color, box-shadow;
+    transition-duration: var(--duration-fast);
+    transition-timing-function: var(--ease-out);
+  }
+  .message-bubble.user { @apply bg-[var(--bg-subtle)] text-[var(--text-default)] rounded-br-sm; }
+  .message-bubble.assistant {
+     /* Explicitly adds a border */
+     @apply bg-[var(--bg-surface)] text-[var(--text-default)] rounded-bl-sm border border-[color:color-mix(in_oklch,_var(--agent-color-primary)_35%,_transparent)];
+  }
+  .message-bubble.assistant:hover { @apply shadow-[var(--shadow-medium),var(--glow-primary-xs)]; }
+
+  .chat-input-container {
+    /* Explicitly adds a top border */
+    @apply fixed bottom-0 left-0 w-full p-3 max-sm:p-2
+           bg-[color:color-mix(in_oklch,_var(--bg-body)_88%,_transparent)]
+           border-t border-[var(--border-default)] z-[var(--z-header)];
+    @media (prefers-reduced-transparency: no-preference) { @apply backdrop-blur-[2px]; }
+    @supports (-webkit-touch-callout: none) {
+        padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+        @media (max-width: 640px) {
+            padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+        }
+    }
+  }
+
+  .chat-input-group {
+    /* Explicitly adds its own border */
+    @apply flex items-end gap-2 p-1.5 rounded-xl
+           bg-[var(--bg-surface)] border border-[var(--border-muted)];
+    transition-property: border-color, box-shadow;
+    transition-duration: var(--duration-normal);
+    transition-timing-function: var(--ease-in-out);
+  }
+  .chat-input-group:focus-within {
+     /* Focus ring handled by global :focus-visible on the input, override border */
+     @apply border-[var(--agent-color-primary)];
+  }
+
+  /* Ensure textarea has no default border/outline */
+  .gsap-chat-input { @apply border-none outline-none focus:ring-0; }
+  .gsap-chat-input::placeholder { @apply text-[var(--text-muted)] opacity-70; }
+
+  .chat-action-button { @apply border-none; }
+  .send-button { @apply border-none; }
+
+  .typing-indicator { @apply flex items-center gap-1.5 py-1 opacity-0; }
+  .typing-dot { @apply size-1.5 rounded-full bg-[var(--agent-color-primary)]; }
+
+  /* ---- Sidebar ---- */
+  .sidebar-container {
+    container-type: inline-size;
+    container-name: sidebar;
+    /* Explicitly adds border-e (logical end border) */
+    @apply fixed top-0 start-0 z-[var(--z-header)] /* Logical start-0 */
+           bg-[var(--bg-body)] border-e border-[var(--border-default)] /* Logical border-e */
+           overflow-y-auto; /* Use .custom-scrollbar in HTML */
+           /* NOTE: Height is applied via .sidebar-height utility class in HTML */
+           transform-style: preserve-3d; perspective: 1000px;
+           translate: -100% 0; box-shadow: none;
+    transition-property: transform, box-shadow, width;
+    transition-duration: var(--duration-slow);
+    transition-timing-function: var(--ease-out);
+    &[open] { @apply translate-x-0 shadow-[var(--shadow-depth)]; }
+
+    @container sidebar (min-width: 1px) {
+         &[data-minimized="true"] { width: var(--sidebar-width-minimized); }
+         &[data-minimized="false"] { width: var(--sidebar-width-expanded); }
+     }
+
+    @media (max-width: 768px) {
+       /* Explicitly adds border-t, removes border-e */
+       @apply w-full h-auto max-h-[75vh] bottom-0 top-auto start-0 /* Logical start-0 */
+              border-e-0 border-t border-[var(--border-default)] /* Logical border-e-0 */
+              rounded-t-xl overflow-hidden
+              translate-x-0 translate-y-full;
+       &[open] { @apply translate-y-0 shadow-[0_-0.75rem_1.5rem_rgba(0,0,0,0.3)] overflow-y-auto; }
+       &::before {
+          @apply content-[''] absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1
+                 rounded-full bg-[var(--border-muted)];
+       }
+       @container sidebar (min-width: 1px) {
+           &[data-minimized="true"], &[data-minimized="false"] { width: 100%; }
+       }
+    }
+  }
+
+  .nav-active-marker {
+    /* No border */
+    /* Uses logical properties -> handled by plugin */
+    @apply absolute inset-block-0 start-0 w-1 rounded-e-full bg-[var(--agent-color-primary)] pointer-events-none;
+    will-change: transform, opacity, height; z-index: 5;
+  }
+
+  /* ---- Modals & Overlays ---- */
+  .modal-overlay { @apply border-none; }
+  .modal-content {
+    /* Explicitly adds its own border */
+    @apply fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
+           bg-[var(--bg-surface)] border border-[var(--border-muted)] rounded-lg shadow-[var(--shadow-depth)]
+           p-6 z-[var(--z-modal)]
+           max-w-[90vw] w-[35rem] max-h-[85vh] overflow-y-auto /* Use .custom-scrollbar in HTML */
+           max-sm:w-[90vw] max-sm:p-5;
+  }
+  .modal-header { @apply flex justify-between items-center pb-4 mb-4 border-b border-[var(--border-muted)]; }
+  .modal-title { @apply font-display text-xl font-semibold text-[var(--text-heading)]; }
+  .modal-close-button { @apply border-none; }
+  .modal-body { @apply mb-6; }
+  .modal-footer { @apply flex justify-end gap-3 pt-4 border-t border-[var(--border-muted)]; }
+
+  /* ---- Tooltips ---- */
+  .tooltip { @apply border-none; }
+
+  /* ---- Badges ---- */
+  .badge { /* No border by default, specific variants add it */
+      @apply border-none;
+  }
+  .gsap-badge-flare-container { position: relative; overflow: hidden; }
+  .gsap-badge-flare { /* Style details */ }
+
+  .badge-default { @apply bg-[var(--bg-subtle)] text-[var(--text-default)]; }
+  /* These variants explicitly add borders */
+  .badge-creative { @apply bg-[color:color-mix(in_oklch,_var(--color-create-magenta-600)_80%,_black)] text-[var(--color-create-magenta-400)] border border-[color:color-mix(in_oklch,_var(--color-create-magenta-500)_50%,_transparent)]; }
+  .badge-value { @apply bg-[color:color-mix(in_oklch,_var(--color-value-amber-600)_80%,_black)] text-[var(--color-value-amber-400)] border border-[color:color-mix(in_oklch,_var(--color-value-amber-500)_50%,_transparent)] shadow-[0_0_4px_color-mix(in_oklch,_black_50%,_transparent)]; }
+  .badge-success { @apply bg-[color:color-mix(in_oklch,_var(--color-success-green-500)_30%,_black)] text-[var(--color-success-green-500)] border border-[color:color-mix(in_oklch,_var(--color-success-green-500)_50%,_transparent)]; }
+
+  /* ---- Progress Bars ---- */
+  .progress-bar-container { @apply border-none; }
+  .progress-bar-fill { @apply border-none; }
+  .progress-bar-fill.creative { @apply bg-[var(--color-create-magenta-500)]; }
+  .progress-bar-fill.value { @apply bg-[var(--color-value-amber-500)]; }
+  .progress-bar-fill.success { @apply bg-[var(--color-success-green-500)]; }
+
+  /* ---- Score Display ---- */
+  .score-display { @apply border-none; }
+
+  /* ---- Specific Component Placeholders ---- */
+  .wallet-display {
+    /* Explicitly adds a border */
+    @apply inline-flex items-center gap-2 rounded-full border border-[var(--border-muted)] bg-[var(--bg-subtle)] px-3 py-1.5;
+  }
+  .wallet-icon { @apply border-none; }
+  .wallet-balance { @apply border-none; }
+  .wallet-currency { @apply text-xs text-[var(--text-muted)] ms-0.5; } /* Logical ms-* */
+
+  .artifact-3d-container { @apply border-none; }
+  .artifact-3d-loader { @apply border-none; }
+  .artifact-3d-controls {
+    /* Explicitly adds a border */
+    @apply absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2 p-1.5
+           z-[var(--z-above)] rounded-full
+           border border-[var(--border-muted)] shadow-[var(--shadow-subtle)] /* Explicit border */
+           [backdrop-filter:blur(10px)] [background-color:color-mix(in_oklch,_var(--bg-surface)_75%,_transparent)];
+  }
+
+  /* ---- Interactive Orb ---- */
+  /* Orb components likely don't need borders */
+
+  /* ---- Oracle Avatar --- */
+  .oracle-avatar-wrapper {
+    /* Explicitly adds a border */
+    @apply relative size-full min-w-[2.25rem] min-h-[2.25rem] rounded-full border-2 border-[var(--border-muted)] shadow-[var(--shadow-medium)] overflow-hidden;
+  }
+  .oracle-avatar-fallback-svg { @apply border-none; }
+  .gsap-avatar-glow-target { @apply border-none; }
+}
+
+/* ========================================
+   4. CSS Layers - Utilities
+   ======================================== */
+@layer utilities {
+  /* NEW: Custom Scrollbar Recipe */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-mineral-gray-600) transparent; /* thumb track */
+  }
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px; /* width of the entire scrollbar */
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent; /* color of the tracking area */
+    margin-block: 2px; /* Optional margin for the track */
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: var(--color-mineral-gray-600); /* color of the scroll thumb */
+    border-radius: 4px; /* roundness of the scroll thumb */
+    border: 2px solid transparent; /* creates padding around scroll thumb */
+    background-clip: content-box; /* ensures border doesn't overlap thumb color */
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-mineral-gray-700); /* darker on hover */
+  }
+  .custom-scrollbar::-webkit-scrollbar-corner {
+      background: transparent; /* Hides the corner piece */
+  }
+
+  /* ---- Font Utilities ---- */
+  /* Generated from @theme block */
+
+  /* ---- Text Utilities ---- */
+  .text-sm { @apply text-sm text-[var(--text-muted)] max-sm:text-xs; }
+  .text-xs { @apply text-xs text-[var(--text-muted)] max-sm:text-[0.625rem]; }
+
+  /* ---- Animation Keyframes ---- */
+  /* MOVED: Keyframes like border-rotate are defined in animations.css */
+
+  /* ---- Filter Utilities ---- */
+  .filter-dream { @apply filter brightness-110 contrast-110 blur-[1px]; }
+  .filter-vintage { @apply filter sepia-[.3] contrast-110 brightness-90; }
+
+  /* ---- Accessibility Utilities ---- */
+  .skip-link { @apply sr-only; }
+  .skip-link:focus {
+    /* Focus ring handled by global :focus-visible */
+    @apply not-sr-only absolute left-2 top-2 z-50
+           bg-[var(--agent-color-primary)] text-white px-3 py-1.5 rounded-md;
+   }
+
+  /* ---- Texture Overlays ---- */
+  /* No borders needed */
+
+  /* ---- Animated Border ---- */
+  /* Container uses raw CSS */
+  .animated-border-container {
+    position: relative;
+    border-radius: inherit; /* Inherit from element it's applied to */
+    padding: 1px; /* Creates space for the border gradient */
+    overflow: hidden;
+    isolation: isolate; /* Needed for mask */
+    /* Ensure no default border is applied to the container itself */
+    border: none;
+  }
+  /* Pseudo-element creates the animated gradient border */
+  .animated-border-container::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: 1px; /* Control border thickness, match container padding */
+      /* Default gradient */
+      background: conic-gradient(from var(--angle, 0deg), var(--color-mineral-gray-700), var(--color-starlight-100), var(--color-mineral-gray-700));
+      /* Masking creates the border effect */
+      -webkit-mask:
+          linear-gradient(#fff 0 0) content-box, /* Transparent inside */
+          linear-gradient(#fff 0 0); /* Opaque outside */
+      mask:
+          linear-gradient(#fff 0 0) content-box,
+          linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      /* Animation */
+      animation: border-rotate 4s linear infinite paused; /* Keyframes in animations.css */
+      animation-play-state: var(--anim-play-state, running);
+      pointer-events: none; /* Allow interaction with content */
+      z-index: -1; /* Place behind content */
+  }
+  .animated-border-container:hover::before {
+    --anim-play-state: running; /* Play animation on hover */
+  }
+  /* Modifier variants using raw CSS */
+  .animated-border-container.creative::before {
+    background: conic-gradient(from var(--angle, 0deg), var(--color-create-magenta-600), var(--color-starlight-100), var(--color-create-magenta-600));
+  }
+  .animated-border-container.value::before {
+    background: conic-gradient(from var(--angle, 0deg), var(--color-value-amber-600), var(--color-starlight-100), var(--color-value-amber-600));
+  }
+
+  /* ---- Debug Utility ---- */
+  .debug { outline: 1px solid red; }
+  .debug * { outline: 1px solid blue; }
+
+  /* ---- One-off utility ---- */
+  .transform-style-preserve-3d { transform-style: preserve-3d; }
+
+  /* ---- Explicit Border Helper ---- */
+  /* Use this class where a default border is needed explicitly */
+  .border-default {
+    @apply border border-[var(--border-default)];
+  }
+
+  /* ---- Height Utility for Sidebar ---- */
+  /* This utility applies the height defined by the --sidebar-height CSS variable. */
+  /* Apply this class directly in HTML/JSX: <aside class="sidebar-container sidebar-height ..."> */
+  .sidebar-height {
+    @apply h-(--sidebar-height); /* Correct Tailwind v4 syntax for height with variable */
+  }
+
+  /* ---- Layout Best Practice Reminder ---- */
+  /* For Flex Column Parents of Virtualized Lists/AutoSizers: */
+  /* Apply `min-h-0` to prevent content overflow issues. */
+  /* Example JSX: <div className="flex flex-col min-h-0"> <List /> </div> */
+  /* Apply this directly in JSX where needed. */
+
+}
+
+/* --- End of File --- */

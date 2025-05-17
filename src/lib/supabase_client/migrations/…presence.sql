@@ -1,0 +1,10 @@
+-- 20240422101501_presence.sql
+--
+-- No database objects required for presence.
+-- Realtime.Presence runs entirely in memory on the Realtime server.
+--
+-- We *do* document the topic–naming convention here for clarity:
+--   presence:workspace:{workspace_id}
+--
+-- (Kept as an empty migration so every logical feature still has a
+-- matching migration file and can be referenced in change logs.)

@@ -1,0 +1,16 @@
+{
+    "ritualDay": 1,
+    "theme": "Spark of Truth",
+    "title": "Ignite the Inner Flame",
+    "narrativeOpening": [
+      "In the hush before dawn, a single spark longs to be born…"
+    ],
+    "oraclePromptPreview": "Describe a truth you have never spoken aloud.",
+    "reflectionGuide": [
+      "Close your eyes and locate the first memory that tingles.",
+      "What color does that memory glow?"
+    ],
+    "accentColor": "var(--palette-purple-500)",
+    "ritualStage": "spark"
+  }
+  

@@ -1,0 +1,37 @@
+/* === Agent Themes for Tailwind v4 === */
+/* Extends the base theme definitions with enhanced contextual colors */
+
+@import "tailwindcss";
+
+@layer base {
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --anim-enable: 0;
+    }
+    
+    *, ::before, ::after {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+      transition-delay: 0ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  .theme-oracle {
+    --agent-color-primary: var(--color-wisdom-indigo-500);
+    --agent-color-secondary: var(--color-wisdom-indigo-400);
+    --agent-color-surface: color-mix(in oklch, var(--color-wisdom-indigo-500) 8%, var(--bg-surface));
+    --agent-color-muted: color-mix(in oklch, var(--color-wisdom-indigo-500) 15%, var(--bg-muted));
+    --agent-color-border: color-mix(in oklch, var(--color-wisdom-indigo-500) 30%, var(--border-default));
+    --agent-color-text-accent: var(--color-wisdom-indigo-400);
+    --agent-avatar-gradient: radial-gradient(
+      circle, 
+      color-mix(in oklch, var(--color-wisdom-indigo-500) 20%, var(--bg-muted)), 
+      color-mix(in oklch, var(--color-wisdom-indigo-400) 10%, var(--bg-subtle))
+    );
+  }
+
+  /* All other .theme-* definitions remain untouched... */
+  /* (Muse, Witness, Navigator, Scribe, Seeker, Editor) */
+}

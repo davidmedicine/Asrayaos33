@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    /* ---------- JavaScript & JSX ---------- */
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "jsx": "preserve",
+    "allowJs": true,
+
+    /* ---------- Type-safety & Build ---------- */
+    "strict": false,          // keep relaxed for MVP
+    "skipLibCheck": true,
+    "noEmit": true,
+    "incremental": true,
+
+    /* ---------- Module Resolution ---------- */
+    "module": "esnext",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+
+    /* ---------- Path Aliases ---------- */
+    "baseUrl": ".",           // project root
+    "paths": {
+      "@/*":                ["src/*"],                                       // existing app code
+      "@supabase-shared/*": ["supabase/functions/_shared/*"],                // shared edge-fn code
+      "@ritual/*":          ["supabase/functions/_shared/5dayquest/*"],      // ritual helpers/constants
+      "@flame":             ["src/lib/shared/firstFlame.ts"]                 // <-- NEW single-file alias
+    },
+
+    /* ---------- Next.js IntelliSense ---------- */
+    "plugins": [{ "name": "next" }]
+  },
+
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude": ["node_modules"]
+}

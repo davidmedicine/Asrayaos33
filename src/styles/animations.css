@@ -1,0 +1,22 @@
+/* ========================================
+   Animation Keyframes
+   ======================================== */
+
+/* Used for animated border effects */
+@keyframes border-rotate {
+    to {
+      /* Rotates the background position to create a moving gradient effect */
+      background-position: 300% 0;
+    }
+  }
+  
+  /* Used for a subtle pulsing effect, e.g., on the sidebar */
+  @keyframes sidebar-pulse {
+    50% {
+      /* Reduces opacity slightly at the midpoint of the animation */
+      opacity: 0.7;
+    }
+  }
+  
+  /* Add any other global @keyframes definitions here */
+  

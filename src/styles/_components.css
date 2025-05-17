@@ -1,0 +1,762 @@
+/* ========================================
+   Component & Utility Styles
+   Imported LAST. Defines component classes and custom utilities.
+   ======================================== */
+
+/* DELETED: Removed problematic @reference directive */
+/* @reference "./global.css"; */
+
+@layer components {
+    /* ---- Icons ---- */
+    .icon {
+      /* Base styling for inline icons */
+      @apply inline-flex items-center justify-center relative fill-current size-[1.1em]; /* Default size based on font */
+    }
+
+    /* ---- Buttons ---- */
+    .btn {
+      /* Base button styles, includes WCAG 2.5.8 target size via padding */
+      @apply inline-flex items-center justify-center relative overflow-hidden select-none cursor-pointer
+             rounded-[var(--radius)] /* Use theme radius */
+             px-3 py-1.5 /* Base padding for 24px target (1.5rem H, 0.75rem V -> 1.5rem total V padding) */
+             text-base font-medium tracking-wider /* Base typography */
+             border border-transparent /* Transparent border to reserve space, avoids layout shift on variant change */
+             transition; /* Use default transition from @theme */
+      /* Raw CSS transition properties */
+      transition-property: background-color, border-color, box-shadow, color, opacity, filter, transform;
+      /* Ensure minimum size even if empty */
+      min-height: calc(var(--spacing) * 3); /* 1.5rem (24px) */
+      min-width: calc(var(--spacing) * 3); /* 1.5rem (24px) */
+    }
+    /* Interaction states */
+    .btn:not(:disabled) {
+      &:hover { @apply brightness-110 filter; } /* Use filter for generic brightness */
+      &:active { @apply brightness-90 scale-[0.98]; } /* Add slight scale on active */
+    }
+    .btn:disabled {
+      @apply opacity-50 cursor-not-allowed brightness-75;
+    }
+
+    /* Button Variants */
+    .btn-primary {
+      @apply bg-[var(--agent-color-primary)] text-white shadow-sm; /* Uses theme shadow utility */
+    }
+    .btn-primary:hover:not(:disabled) {
+      @apply shadow-[var(--glow-primary-xs)]; /* Use custom glow var */
+    }
+    .btn-primary:disabled {
+      /* Ensure shadow-none utility is used */
+      @apply bg-[var(--bg-subtle)] text-[var(--text-muted)] shadow-none;
+    }
+
+    .btn-secondary {
+      /* Explicitly uses border */
+      @apply bg-[var(--bg-subtle)] text-[var(--text-default)] border-[var(--border-default)] shadow-sm;
+    }
+    .btn-secondary:hover:not(:disabled) {
+      @apply bg-[var(--bg-muted)] border-[var(--border-muted)];
+    }
+    .btn-secondary:disabled {
+      @apply border-[var(--border-muted)] bg-transparent;
+    }
+
+    .btn-creative {
+      @apply bg-[var(--color-create-magenta-500)] text-white shadow-sm;
+    }
+    .btn-creative:hover:not(:disabled) {
+      @apply shadow-[var(--glow-create-medium)];
+    }
+    .btn-creative:disabled {
+      /* Ensure shadow-none utility is used */
+      @apply bg-[var(--bg-subtle)] text-[var(--text-muted)] shadow-none;
+    }
+
+    .btn-value {
+      @apply bg-[var(--color-value-amber-500)] text-black shadow-sm;
+    }
+    .btn-value:hover:not(:disabled) {
+      @apply shadow-[var(--glow-value-medium)];
+    }
+    .btn-value:disabled {
+      /* Ensure shadow-none utility is used */
+      @apply bg-[var(--bg-subtle)] text-[var(--text-muted)] shadow-none;
+     }
+
+    .btn-danger {
+      @apply bg-[var(--color-danger-red-500)] text-white shadow-sm;
+    }
+    .btn-danger:hover:not(:disabled) {
+      @apply shadow-[var(--glow-danger-medium)];
+    }
+    .btn-danger:disabled {
+      /* Ensure shadow-none utility is used */
+      @apply bg-[var(--bg-subtle)] text-[var(--text-muted)] shadow-none;
+     }
+
+    .btn-ghost {
+      /* Ensure shadow-none utility is used */
+      @apply bg-transparent text-[var(--text-muted)] shadow-none border-transparent;
+    }
+    .btn-ghost:hover:not(:disabled) {
+      @apply bg-white/5 text-[var(--text-default)]; /* Subtle background on hover */
+    }
+    .btn-ghost:active:not(:disabled) {
+      @apply bg-white/10;
+    }
+
+    /* ---- Form Elements ---- */
+    .input-field, textarea.input-field, select.input-field {
+      /* Base input styling */
+      @apply w-full block /* Ensure block display */
+             rounded-[var(--radius)] /* Consistent rounding */
+             px-3 py-2 /* Standard padding (py-2 = 1rem) */
+             bg-[var(--bg-surface)] text-[var(--text-default)] /* Theme colors */
+             border border-[var(--border-muted)] /* Default border */
+             shadow-[var(--shadow-inset-sm)] /* Subtle inset shadow */
+             transition; /* Use theme transition */
+      /* Raw CSS transition properties */
+      transition-property: border-color, box-shadow;
+      /* Ensure focus ring is not clipped */
+      outline: none;
+    }
+    .input-field:focus {
+       /* Focus ring handled by global :focus-visible, override border */
+       @apply border-[var(--agent-color-primary)];
+       /* Optional: slightly stronger inset shadow on focus */
+       /* @apply shadow-[var(--shadow-inset-md)]; */
+    }
+    .input-field::placeholder {
+      @apply text-[var(--text-muted)] opacity-70;
+    }
+    textarea.input-field {
+      min-height: 8rem; /* Default textarea height */
+    }
+
+    .error-message {
+      @apply text-[var(--color-danger-red-500)] text-xs /* Use theme text size */
+             mt-1; /* Spacing below input (8pt grid: mt-1 = 0.5rem) */
+    }
+
+    /* ---- Cards, Panels ---- */
+    /* Add margin to prevent touching */
+    .card {
+      @apply block /* Ensure block display */
+             overflow-hidden rounded-[var(--radius)] /* Consistent rounding */
+             bg-[var(--bg-surface)] /* Theme background */
+             border border-[var(--border-muted)] /* Default border */
+             shadow-medium /* Use theme shadow utility */
+             p-4 /* Default padding (2rem -> 32px) */
+             mb-4; /* Breathing room (2rem -> 32px) */
+      /* Raw CSS transition properties */
+      transition-property: background-color, border-color, box-shadow;
+      transition-duration: var(--duration-fast);
+      transition-timing-function: var(--ease-out);
+    }
+    /* Example: Add spacing between cards in a flex/grid container */
+    /* .card-container { @apply flex flex-col gap-4; } or grid */
+
+    .gsap-card-hover-target {
+      /* Raw CSS properties */
+      transform-style: preserve-3d;
+      perspective: 1000px;
+    }
+
+    .panel {
+      @apply block /* Ensure block display */
+             rounded-[var(--radius)]
+             bg-[var(--bg-surface)] border border-[var(--border-muted)] text-[var(--text-default)]
+             p-4 /* Default padding */
+             mb-4; /* Breathing room */
+    }
+
+    /* Glassmorphic component definition */
+    .glassmorphic {
+      /* isolation-auto is the correct utility for isolation: auto */
+      @apply border border-[var(--border-muted)] shadow-subtle rounded-[var(--radius)] isolation-auto; /* Ensure valid utility */
+      /* Apply blur only if supported and preferred */
+      @supports (backdrop-filter: blur(1px)) {
+        @media (prefers-reduced-transparency: no-preference) {
+          /* Raw CSS properties */
+          backdrop-filter: blur(12px);
+          background-color: color-mix(in oklch, var(--bg-surface) 75%, transparent);
+        }
+        /* Fallback for reduced transparency preference */
+        @media not (prefers-reduced-transparency: no-preference) {
+           /* Raw CSS property */
+           background-color: var(--bg-surface);
+        }
+      }
+      /* Fallback for no backdrop-filter support */
+      @supports not (backdrop-filter: blur(1px)) {
+         /* Raw CSS property */
+         background-color: var(--bg-surface);
+      }
+    }
+
+    /* ---- Chat Elements ---- */
+    .gsap-flip-container { @apply relative; }
+
+    .chat-box {
+      /* Main container for the chat interface */
+      @apply container min-h-dvh w-full overflow-hidden relative bg-[var(--bg-surface)] text-[var(--text-default)];
+    }
+
+    .chat-messages-container {
+      @apply relative overflow-y-auto p-4 pb-28; /* Add padding, leave space for input */
+      /* Apply custom scrollbar via utility class in HTML: <div class="chat-messages-container custom-scrollbar"> */
+      /* Raw CSS property */
+      height: calc(100dvh - 6rem); /* Example height, adjust based on header/input */
+    }
+
+    .chat-message {
+      /* Individual message wrapper, add margin for spacing */
+      @apply w-full max-w-3xl relative origin-bottom
+             mb-3; /* Breathing room (1.5rem -> 24px) */
+
+      & .message-time {
+        @apply block mt-1 text-xs text-[var(--text-muted)] opacity-0 group-hover:opacity-80; /* Show on hover */
+        /* Raw CSS transition */
+        transition: opacity var(--duration-fast) var(--ease-out);
+      }
+      /* Add group class to .chat-message in HTML for hover effect */
+      /* <div class="chat-message group assistant">...</div> */
+      &.user .message-time { @apply text-end; }
+      &.assistant .message-time { @apply text-start; }
+    }
+
+    .chat-bubble {
+      /* The bubble containing message text */
+      @apply relative inline-block max-w-[90%] overflow-hidden text-left
+             rounded-lg shadow-subtle /* Theme shadow */
+             px-3 py-2 /* Padding (1.5rem H, 1rem V) */
+             text-base max-sm:text-sm leading-relaxed; /* Responsive text */
+      /* Raw CSS transition */
+      transition: background-color, border-color, box-shadow var(--duration-fast) var(--ease-out);
+      /* Raw CSS property */
+      word-break: break-word; /* Prevent long words from overflowing */
+    }
+    .message-bubble.user {
+      @apply bg-[var(--bg-subtle)] text-[var(--text-default)] rounded-br-sm; /* Different rounding for user */
+    }
+    .message-bubble.assistant {
+       /* Assistant bubble with subtle agent color border */
+       @apply bg-[var(--bg-surface)] text-[var(--text-default)] rounded-bl-sm /* Different rounding */
+              border border-[color-mix(in_oklch,_var(--agent-color-primary)_35%,_transparent)];
+    }
+    .message-bubble.assistant:hover {
+      @apply shadow-[var(--shadow-medium),var(--glow-primary-xs)]; /* Enhanced shadow on hover */
+    }
+
+    .chat-input-container {
+      /* Sticky input area at the bottom */
+      /* Use 'isolate' utility inside @apply */
+      /* !!! FIX APPLIED HERE !!! */
+      @apply fixed bottom-0 inset-inline-0 /* Use logical properties */
+             p-3 max-sm:p-2
+             border-t border-[var(--border-default)]
+             z-[var(--z-header)] /* Use theme z-index variable via arbitrary value */
+             isolate; /* Use 'isolate' utility */
+      /* Apply glassmorphism using raw CSS outside @apply (or use utilities if a plugin exists) */
+      @supports (backdrop-filter: blur(1px)) {
+        @media (prefers-reduced-transparency: no-preference) {
+          /* Raw CSS */
+          backdrop-filter: blur(8px);
+          background-color: color-mix(in oklch, var(--bg-body) 80%, transparent);
+        }
+        @media not (prefers-reduced-transparency: no-preference) {
+           /* Raw CSS */
+           background-color: var(--bg-body);
+        }
+      }
+      @supports not (backdrop-filter: blur(1px)) {
+         /* Raw CSS */
+         background-color: var(--bg-body);
+      }
+      /* Add padding for iOS safe area */
+      @supports (-webkit-touch-callout: none) {
+          /* Raw CSS */
+          padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)); /* 12px + safe area */
+          @screen max-sm { /* Tailwind equivalent of max-width: 640px */
+              /* Raw CSS */
+              padding-bottom: calc(0.5rem + env(safe-area-inset-bottom)); /* 8px + safe area */
+          }
+      }
+    }
+
+    .chat-input-group {
+      /* Wrapper for the input and send button */
+      @apply flex items-end gap-2 p-1.5 /* 8pt grid: gap-2=1rem, p-1.5=0.75rem */
+             rounded-xl /* More rounded than default inputs */
+             bg-[var(--bg-surface)] border border-[var(--border-muted)];
+      /* Raw CSS transition */
+      transition: border-color, box-shadow var(--duration-normal) var(--ease-in-out);
+    }
+    .chat-input-group:focus-within {
+       /* Use focus ring variable for consistency */
+       @apply border-[var(--agent-color-primary)];
+       /* Raw CSS box-shadow */
+       box-shadow: 0 0 0 1px var(--agent-color-primary); /* Optional inner glow */
+    }
+
+    .gsap-chat-input { /* This is likely the <textarea> */
+      @apply flex-1 bg-transparent border-none outline-none resize-none /* Basic reset */
+             p-2; /* Padding inside the textarea (1rem) */
+             /* Ensure no default browser border/outline */
+             &::placeholder { @apply text-[var(--text-muted)] opacity-70; }
+    }
+
+    .chat-action-button {
+      /* Buttons like attach, etc. - use btn styles */
+      @apply btn btn-ghost; /* Use ghost style by default */
+      /* Ensure WCAG target size */
+      min-height: calc(var(--spacing) * 3); /* 1.5rem (24px) */
+      min-width: calc(var(--spacing) * 3); /* 1.5rem (24px) */
+      padding: var(--spacing); /* 0.5rem (8px) padding */
+    }
+    .send-button {
+      /* Send button - use primary style */
+      @apply btn btn-primary;
+      /* Ensure WCAG target size */
+      min-height: calc(var(--spacing) * 3); /* 1.5rem (24px) */
+      min-width: calc(var(--spacing) * 3); /* 1.5rem (24px) */
+      padding: var(--spacing); /* 0.5rem (8px) padding */
+    }
+
+    .typing-indicator {
+      @apply flex items-center gap-1.5 py-1 opacity-0 transition-opacity duration-fast; /* 8pt grid: gap-1.5=0.75rem */
+      /* JS should toggle opacity */
+      &.active { @apply opacity-100; }
+    }
+    .typing-dot {
+      @apply size-1.5 rounded-full bg-[var(--agent-color-primary)]; /* 8pt grid: size-1.5=0.75rem */
+      /* Keyframes for animation should be in animations.css */
+      /* animation: typing-dot-bounce 1s infinite ease-in-out; */
+      /* animation-delay: var(--delay, 0s); */
+    }
+
+    /* ---- Sidebar ---- */
+    .sidebar-container {
+      /* Raw CSS properties */
+      container-type: inline-size;
+      container-name: sidebar;
+      transform-style: preserve-3d;
+      perspective: 1000px;
+      transition: transform var(--duration-slow) var(--ease-out),
+                  box-shadow var(--duration-slow) var(--ease-out),
+                  width var(--duration-normal) var(--ease-out);
+      /* Apply block for utilities */
+      /* !!! FIX APPLIED HERE !!! */
+      @apply fixed inset-block-0 start-0 h-dvh z-[var(--z-header)] /* Positioning & Base - Use arbitrary value */
+             bg-[var(--bg-body)] border-e border-[var(--border-default)] /* Background & Border */
+             overflow-y-auto /* Scrolling */
+             /* Initial State Utilities */
+             -translate-x-full shadow-none
+             /* Isolation Utility */
+             isolate;
+
+      /* Open state styling */
+      &[data-state="open"] {
+        /* Utilities for open state transform/shadow */
+        @apply translate-x-0 shadow-depth;
+      }
+
+      /* Container query for width */
+      @container sidebar (min-width: 1px) {
+        /* Raw CSS width assignment based on attribute */
+        &[data-minimized="true"] { width: var(--sidebar-width-minimized); }
+        &[data-minimized="false"] { width: var(--sidebar-width-expanded); }
+      }
+
+      /* Mobile/Tablet Override (using Tailwind @screen) */
+      @screen md {
+         /* Apply utilities for desktop layout */
+         @apply w-[var(--sidebar-width-expanded)] translate-x-0 shadow-none border-e border-[var(--border-default)];
+
+          &[data-minimized="true"] {
+              /* Apply utility for minimized desktop width */
+              @apply w-[var(--sidebar-width-minimized)];
+          }
+           /* Raw CSS to hide pseudo-element */
+           &::before { display: none; }
+      }
+
+       /* Mobile Styles (Default, overridden by @screen md) */
+       @apply w-full h-auto max-h-[75vh] inset-block-auto bottom-0 start-0 /* Positioning */
+              border-e-0 border-t border-[var(--border-default)] /* Borders */
+              rounded-t-xl overflow-hidden /* Appearance & Scrolling */
+              translate-x-0 translate-y-full; /* Initial Transform */
+
+        &[data-state="open"] {
+            /* Utilities for open mobile state */
+            @apply translate-y-0 shadow-[0_-0.75rem_1.5rem_rgba(0,0,0,0.3)]; /* Using arbitrary shadow */
+        }
+        /* Mobile drag handle indicator */
+         &::before {
+            /* Utilities for pseudo-element styling */
+            @apply content-[''] absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1
+                   rounded-full bg-[var(--border-muted)];
+         }
+         /* Reset container query width on mobile */
+         @container sidebar (min-width: 1px) {
+             /* Raw CSS width */
+             &[data-minimized="true"], &[data-minimized="false"] { width: 100%; }
+         }
+    }
+
+
+    .nav-active-marker {
+      /* Animated marker for active nav item */
+      @apply absolute inset-block-0 start-0 w-1 /* Logical */
+             rounded-e-full /* Logical */
+             bg-[var(--agent-color-primary)] pointer-events-none;
+      /* Raw CSS performance hint */
+      will-change: transform, opacity, height;
+      /* Raw CSS z-index */
+      z-index: 5; /* Ensure visibility */
+      /* Animation handled by GSAP via JS */
+    }
+
+    /* ---- Modals & Overlays ---- */
+    .modal-overlay {
+      /* Assuming --z-overlay is defined in global.css or @theme */
+      @apply fixed inset-0 bg-black/60 z-[var(--z-overlay)]; /* Use theme z-index var */
+      /* Optional backdrop blur */
+      @supports (backdrop-filter: blur(1px)) {
+        @media (prefers-reduced-transparency: no-preference) {
+          /* Use Tailwind utility for blur */
+          @apply backdrop-blur-[4px];
+        }
+      }
+      /* Animation handled by presence.css / JS */
+    }
+    .modal-content {
+      /* Assuming --z-modal is defined in global.css or @theme */
+      @apply fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 /* Centering */
+             bg-[var(--bg-surface)] border border-[var(--border-muted)] rounded-lg shadow-depth /* Appearance */
+             p-6 /* Default padding (32px) */
+             z-[var(--z-modal)] /* Use theme z-index var */
+             max-w-[90vw] w-[35rem] max-h-[85vh] overflow-y-auto /* Sizing & Scrolling */
+             max-sm:w-[90vw] max-sm:p-4; /* Responsive padding */
+      /* Animation handled by presence.css / JS */
+    }
+    .modal-header {
+      @apply flex justify-between items-center
+             pb-3 mb-4 /* 8pt grid spacing */
+             border-b border-[var(--border-muted)];
+    }
+    .modal-title {
+      @apply font-display text-xl font-semibold text-[var(--text-heading)];
+    }
+    .modal-close-button {
+      @apply btn btn-ghost -mr-2 -mt-1; /* Adjust positioning */
+       /* Ensure WCAG target size */
+      min-height: calc(var(--spacing) * 3); min-width: calc(var(--spacing) * 3);
+      padding: var(--spacing);
+    }
+    .modal-body {
+      @apply mb-5; /* 8pt grid spacing */
+    }
+    .modal-footer {
+      @apply flex justify-end gap-3 /* 8pt grid spacing */
+             pt-4 /* 8pt grid spacing */
+             border-t border-[var(--border-muted)];
+    }
+
+    /* ---- Tooltips ---- */
+    .tooltip {
+      /* Assuming --z-tooltip is defined in global.css or @theme */
+      /* Basic tooltip styling - animation/positioning often handled by JS library */
+      @apply absolute z-[var(--z-tooltip)] /* Theme z-index var */
+             bg-[var(--bg-subtle)] text-[var(--text-muted)] text-xs
+             px-2 py-1 rounded shadow-md
+             pointer-events-none;
+      /* Animation handled by presence.css / JS */
+    }
+
+    /* ---- Badges ---- */
+    .badge {
+      /* Base badge style */
+      @apply inline-flex items-center justify-center
+             px-2.5 py-0.5 /* Padding */
+             rounded-full /* Fully rounded */
+             text-xs font-medium /* Typography */
+             border; /* Add base border definition */
+    }
+    /* Required for flare animation */
+    .gsap-badge-flare-container { position: relative; overflow: hidden; } /* Raw CSS */
+    .gsap-badge-flare { /* Style details likely defined elsewhere or via JS */ }
+
+    /* Badge Variants */
+    .badge-default {
+      @apply bg-[var(--bg-subtle)] text-[var(--text-default)] border-[var(--border-muted)];
+    }
+    .badge-creative {
+      @apply bg-[color-mix(in_oklch,_var(--color-create-magenta-600)_20%,_transparent)] /* Lighter bg */
+             text-[var(--color-create-magenta-400)]
+             border-[color-mix(in_oklch,_var(--color-create-magenta-500)_50%,_transparent)];
+    }
+    .badge-value {
+      @apply bg-[color-mix(in_oklch,_var(--color-value-amber-600)_20%,_transparent)]
+             text-[var(--color-value-amber-400)]
+             border-[color-mix(in_oklch,_var(--color-value-amber-500)_50%,_transparent)];
+    }
+    .badge-success {
+      @apply bg-[color-mix(in_oklch,_var(--color-success-green-500)_20%,_transparent)]
+             text-[var(--color-success-green-500)]
+             border-[color-mix(in_oklch,_var(--color-success-green-500)_50%,_transparent)];
+    }
+     /* Add other variants (warning, danger, info) */
+    .badge-danger {
+      @apply bg-[color-mix(in_oklch,_var(--color-danger-red-500)_20%,_transparent)]
+             text-[var(--color-danger-red-500)]
+             border-[color-mix(in_oklch,_var(--color-danger-red-500)_50%,_transparent)];
+    }
+
+    /* ---- Progress Bars ---- */
+    .progress-bar-container {
+      @apply w-full h-2 bg-[var(--bg-subtle)] rounded-full overflow-hidden;
+    }
+    .progress-bar-fill {
+      @apply h-full rounded-full bg-[var(--agent-color-primary)] /* Default color */
+             transition-[width] duration-slow ease-out; /* Animate width change */
+    }
+    /* Color variants */
+    .progress-bar-fill.creative { @apply bg-[var(--color-create-magenta-500)]; }
+    .progress-bar-fill.value { @apply bg-[var(--color-value-amber-500)]; }
+    .progress-bar-fill.success { @apply bg-[var(--color-success-green-500)]; }
+
+    /* ---- Score Display ---- */
+    .score-display {
+      /* Example component - adjust as needed */
+      @apply flex flex-col items-center p-4 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-muted)] shadow-sm;
+    }
+    .score-value { @apply font-display text-3xl font-bold text-[var(--agent-color-primary)]; }
+    .score-label { @apply text-sm text-[var(--text-muted)] mt-1; }
+
+
+    /* ---- Specific Component Placeholders ---- */
+    .wallet-display {
+      /* Component to show wallet balance */
+      @apply inline-flex items-center gap-2 /* 8pt grid */
+             rounded-full border border-[var(--border-muted)] bg-[var(--bg-subtle)]
+             px-3 py-1.5; /* Padding */
+    }
+    .wallet-icon {
+       /* Style for wallet icon */
+       @apply size-5 text-[var(--text-muted)]; /* 1.25rem = 20px */
+    }
+    .wallet-balance {
+      @apply font-medium text-[var(--text-default)];
+    }
+    .wallet-currency {
+      @apply text-xs text-[var(--text-muted)] ms-0.5; /* Logical margin */
+    }
+
+    .artifact-3d-container {
+      @apply relative w-full aspect-square bg-[var(--bg-muted)] rounded-lg overflow-hidden shadow-inner;
+    }
+    .artifact-3d-loader {
+      /* Style for loading state */
+      @apply absolute inset-0 flex items-center justify-center bg-black/30 text-white z-[10]; /* Example z-index, adjust if needed */
+    }
+    .artifact-3d-controls {
+      /* Controls overlay for 3D view */
+      /* isolation-auto is the correct utility for isolation: auto */
+      /* Use arbitrary z-index if needed, e.g., z-[15] */
+      @apply absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2 p-1.5 /* 8pt grid */
+             z-[15] rounded-full shadow-subtle isolation-auto; /* Ensure valid utility, example arbitrary z-index */
+      /* Apply glassmorphism */
+       @supports (backdrop-filter: blur(1px)) {
+        @media (prefers-reduced-transparency: no-preference) {
+          /* Raw CSS */
+          backdrop-filter: blur(8px);
+          background-color: color-mix(in oklch, var(--bg-surface) 75%, transparent);
+          border: 1px solid var(--border-muted);
+        }
+         @media not (prefers-reduced-transparency: no-preference) {
+           /* Raw CSS */
+           @apply bg-[var(--bg-surface)] border border-[var(--border-muted)];
+        }
+      }
+      @supports not (backdrop-filter: blur(1px)) {
+         /* Raw CSS */
+         @apply bg-[var(--bg-surface)] border border-[var(--border-muted)];
+      }
+    }
+
+    /* ---- Interactive Orb ---- */
+    /* Orb components - styling depends heavily on implementation (SVG, Canvas, CSS) */
+    /* .interactive-orb { ... } */
+
+    /* ---- Oracle Avatar --- */
+    .oracle-avatar-wrapper {
+      /* Container for the avatar */
+      @apply relative size-full min-w-[2.25rem] min-h-[2.25rem] /* Base size (36px) */
+             rounded-full border-2 border-[var(--border-muted)] /* Border */
+             shadow-medium /* Theme shadow */
+             overflow-hidden /* Clip contents */
+             bg-[var(--agent-avatar-gradient)]; /* Use gradient var */
+    }
+    .oracle-avatar-fallback-svg {
+      /* Fallback if image fails */
+      @apply absolute inset-0 size-full object-cover text-[var(--agent-color-primary)];
+    }
+    .gsap-avatar-glow-target {
+      /* Element GSAP targets for glow effect */
+      @apply absolute inset-[-4px] rounded-full border border-transparent; /* Size slightly larger for glow */
+      /* Glow applied via GSAP using --avatar-glow-alpha/scale */
+      /* Raw CSS box-shadow */
+       box-shadow: 0 0 calc(8px * var(--avatar-glow-scale, 1)) calc(2px * var(--avatar-glow-scale, 1))
+                   color-mix(in oklch, var(--agent-color-primary) calc(50% * var(--avatar-glow-alpha, 0)), transparent);
+    }
+  }
+
+
+  /* ========================================
+     Utilities Layer
+     ======================================== */
+  @layer utilities {
+    /* ---- Custom Scrollbar ---- */
+    /* Apply this class to elements needing custom scrollbars */
+    .custom-scrollbar {
+      /* Raw CSS properties */
+      scrollbar-width: thin; /* Firefox */
+      scrollbar-color: var(--color-mineral-gray-600) transparent; /* Firefox */
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-corner { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background-color: var(--color-mineral-gray-600);
+      border-radius: 4px;
+      border: 2px solid transparent; /* Creates padding around thumb */
+      background-clip: content-box;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background-color: var(--color-mineral-gray-700);
+    }
+
+    /* ---- Font Utilities ---- */
+    /* Base font utilities (.font-body, .font-display, .font-mono) are generated by Tailwind from @theme */
+
+    /* ---- Text Utilities ---- */
+    /* Theme text sizes (text-xs, text-sm, etc.) generated by Tailwind */
+    /* Custom responsive/colored text utils if needed */
+    .text-subtle { @apply text-[var(--text-subtle)]; }
+    .text-muted { @apply text-[var(--text-muted)]; }
+
+    /* ---- Animation Utilities ---- */
+    /* Keyframes are defined in animations.css */
+    /* Example utility using an animation from animations.css */
+    /* .animate-spin-slow { animation: spin 3s linear infinite; } */
+    /* DELETED: Removed .animate-sidebar-pulse as keyframe moved/potentially unused */
+
+    /* ---- Filter Utilities ---- */
+    /* Pre-defined filter combinations */
+    .filter-dream { filter: brightness(1.1) contrast(1.1) blur(1px); } /* Raw CSS */
+    .filter-vintage { filter: sepia(0.3) contrast(1.1) brightness(0.9); } /* Raw CSS */
+    /* Consider using Tailwind filter utilities directly: `brightness-110 contrast-110 blur-sm` */
+
+    /* ---- Accessibility Utilities ---- */
+    .skip-link {
+      @apply sr-only; /* Hide visually, keep accessible */
+    }
+    .skip-link:focus {
+      /* Assuming --z-toast is defined in global.css or @theme */
+      @apply not-sr-only fixed left-4 top-4 z-[var(--z-toast)] /* Use theme z-index var */
+             bg-[var(--agent-color-primary)] text-white px-4 py-2 rounded-md shadow-lg;
+             /* Ensure focus style is different from default :focus-visible if needed */
+    }
+
+    /* ---- Texture Overlays ---- */
+    /* Example: .texture-noise { background-image: url('/textures/noise.png'); opacity: 0.05; } */
+
+    /* ---- Animated Border ---- */
+    .animated-border-container {
+      /* Using 'isolate' utility */
+      @apply relative rounded-[inherit] p-px overflow-hidden isolate; /* Ensure valid utility */
+      &::before {
+          /* Raw CSS */
+          content: '';
+          position: absolute;
+          inset: -1px; /* Cover border area */
+          border-radius: inherit;
+          padding: 1px; /* Control border thickness */
+          /* Default gradient */
+          background: conic-gradient(from var(--angle, 0deg),
+                        var(--border-muted),
+                        var(--color-starlight-100),
+                        var(--border-muted));
+          /* Mask to create the border effect */
+          -webkit-mask:
+              linear-gradient(#fff 0 0) content-box, /* Keep content area */
+              linear-gradient(#fff 0 0); /* Mask everything */
+          mask:
+              linear-gradient(#fff 0 0) content-box,
+              linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor; /* Punch out content area */
+          mask-composite: exclude;
+          /* Animation defined in animations.css (border-rotate) */
+          animation: border-rotate 4s linear infinite paused; /* Paused by default */
+          animation-play-state: var(--anim-play-state, paused);
+      }
+      &:hover::before {
+        /* Raw CSS */
+        --anim-play-state: running;
+      }
+    }
+    /* Modifier variants for different colors */
+    .animated-border-container.creative::before {
+      background: conic-gradient(from var(--angle, 0deg), var(--color-create-magenta-600), var(--color-starlight-100), var(--color-create-magenta-600));
+    }
+    .animated-border-container.value::before {
+      background: conic-gradient(from var(--angle, 0deg), var(--color-value-amber-600), var(--color-starlight-100), var(--color-value-amber-600));
+    }
+
+    /* ---- Debug Utility ---- */
+    .debug { outline: 1px solid red !important; } /* Raw CSS */
+    .debug * { outline: 1px solid blue !important; } /* Raw CSS */
+
+    /* ---- One-off/Helper Utilities ---- */
+    .transform-style-preserve-3d { transform-style: preserve-3d; } /* Raw CSS */
+    .border-default { @apply border border-[var(--border-default)]; } /* Explicit default border */
+
+    /* ---- Fluid Spacing Example ---- */
+    /* Applies padding using clamp() based on 8pt grid */
+    .p-fluid {
+      /* Utility with arbitrary value */
+      @apply p-[clamp(calc(var(--spacing)*2),calc(var(--spacing)+2vw),calc(var(--spacing)*4))];
+    }
+    /* Example usage: <div class="card p-fluid">...</div> */
+
+    /* ---- Safari Flex Gap Fallback ---- */
+    /* Utility to apply gap and provide fallback margin for browsers not supporting gap in flexbox */
+    .gap-flex-fallback {
+      /* Raw CSS property */
+      gap: var(--gap, 1rem); /* Use standard gap, allow override with --gap variable */
+    }
+    @supports not (gap: 1rem) { /* Target browsers WITHOUT gap support */
+      .gap-flex-fallback.flex-row > * + * {
+        /* Raw CSS */
+        margin-inline-start: var(--gap, 1rem); /* Fallback for horizontal gap */
+      }
+      .gap-flex-fallback.flex-col > * + * {
+        /* Raw CSS */
+        margin-block-start: var(--gap, 1rem); /* Fallback for vertical gap */
+      }
+      /* Add fallbacks for flex-row-reverse, flex-col-reverse if needed */
+       .gap-flex-fallback.flex-row-reverse > * + * {
+          /* Raw CSS */
+          margin-inline-end: var(--gap, 1rem);
+       }
+       .gap-flex-fallback.flex-col-reverse > * + * {
+          /* Raw CSS */
+          margin-block-end: var(--gap, 1rem);
+       }
+    }
+    /* Apply like: <div class="flex flex-row gap-flex-fallback" style="--gap: 1.5rem;">...</div> */
+    /* Or <div class="flex flex-col gap-flex-fallback">...</div> */
+
+  }
+
+  /* --- End of File --- */

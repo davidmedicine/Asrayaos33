@@ -1,0 +1,324 @@
+/* ========================================
+   Presence Shelf Components Styles - src/styles/presence.css
+   ======================================== */
+
+/*
+ * IMPORTANT: The file manages GSAP from the global.css file - This file needs to be imported into your main CSS entry point
+ * (e.g., src/styles/globals.css, src/styles/index.css, or loaded in your root layout)
+ * for Vite/Next.js/etc. to bundle it.
+ *
+ * Example:
+ * // in globals.css or index.css
+ * @import './presence.css';
+ *
+ * SYNTAX NOTE (Tailwind v4+):
+ * This file utilizes the new Tailwind v4 shorthand for CSS variables within
+ * @apply directives. For example:
+ * - `bg-(--bg-subtle)` instead of `bg-[var(--bg-subtle)]`
+ * - `border-(--border-muted)` instead of `border-[var(--border-muted)]`
+ * This shorthand automatically expands to `bg-[var(--variable-name)]`,
+ * passes Tailwind’s stricter parser, and keeps utility classes concise.
+ * Ensure you are using a compatible Tailwind CSS version.
+ */
+
+/*
+ * The :root block containing light theme variables has been removed
+ * to allow globally defined variables (e.g., for dark theme in global.css)
+ * to take precedence.
+ */
+
+/* ---- Animation Keyframes ---- */
+/* Unique prefix 'asr-' used to reduce potential collision risk */
+@keyframes asr-typing-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+/* ---- OnlineFriendChip component ---- */
+.online-friend-chip {
+  /* Using Tailwind v4 shorthand: bg-(--variable), border-(--variable) */
+  /* These variables should now resolve to your global theme values */
+  @apply relative flex items-center gap-2 px-3 py-1.5 rounded-full
+         bg-(--bg-subtle) border border-(--border-muted)
+         transition-all cursor-pointer select-none;
+}
+.online-friend-chip:hover {
+  /* Using Tailwind v4 shorthand: bg-(--variable), shadow-(--variable) */
+  @apply bg-(--bg-muted) shadow-(--shadow-subtle);
+}
+.online-friend-chip:focus-visible {
+  /* Standard focus outline, accessibility handled below for forced-colors */
+  /* Using Tailwind v4 shorthand: ring-(--variable), ring-offset-(--variable) */
+  @apply outline-none ring-2 ring-offset-2 ring-(--color-focus-ring) ring-offset-(--bg-surface);
+}
+
+/* ---- Presence Dot Styles ---- */
+.presence-dot {
+  /* Using Tailwind v4 shorthand: bg-(--variable), border-(--variable) */
+  @apply absolute size-2.5 rounded-full bg-(--color-success-green-500)
+         -right-0.5 -bottom-0.5 border-2 border-(--bg-surface) z-10;
+  /* Define animation properties using variables (defined elsewhere or fallback) */
+  --asr-typing-pulse-duration: 1s;      /* Default or override */
+  --asr-typing-pulse-timing: cubic-bezier(0.4, 0, 0.6, 1); /* Default or override */
+}
+
+.presence-dot.away {
+  /* Using Tailwind v4 shorthand: bg-(--variable) */
+  @apply bg-(--color-value-amber-500);
+  /* Ensure away state overrides any potential animation */
+  animation: none;
+}
+
+/* Base style for typing dot (color change) - applies regardless of motion preference */
+.presence-dot.typing {
+    /* Using Tailwind v4 shorthand: bg-(--variable) */
+    @apply bg-(--agent-color-primary);
+}
+
+/* ---- Accessibility: Motion & Data Preferences ---- */
+
+/* Apply animation only if the user hasn't requested reduced motion */
+@media (prefers-reduced-motion: no-preference) {
+  .presence-dot.typing:not(.away) { /* Don't animate if also away */
+    animation: asr-typing-pulse var(--asr-typing-pulse-duration) var(--asr-typing-pulse-timing) infinite;
+  }
+}
+
+/* Explicitly disable animation if the user has requested reduced data */
+@media (prefers-reduced-data: reduce) {
+  .presence-dot.typing {
+    animation: none;
+  }
+}
+
+
+/* ---- OnlineFriendsShelf component ---- */
+.online-friends-shelf {
+  /* Using Tailwind v4 shorthand: bg-(--variable), border-(--variable), shadow-(--variable) */
+  @apply flex items-center gap-2 px-3 py-2
+         bg-(--bg-surface) border border-(--border-muted)
+         rounded-lg shadow-(--shadow-subtle);
+}
+.online-friends-shelf .avatar-stack {
+  @apply flex items-center;
+}
+.online-friends-shelf .avatar-stack .avatar {
+  /* Using Tailwind v4 shorthand: border-(--variable), bg-(--variable) */
+  @apply relative size-8 rounded-full border-2 border-(--bg-surface)
+         bg-(--bg-subtle) -ml-3 first:ml-0
+         transition-all overflow-hidden;
+}
+.online-friends-shelf .avatar-stack .more-count {
+  /* Using Tailwind v4 shorthand: border-(--variable), bg-(--variable), text-(--variable) */
+  @apply relative size-8 rounded-full border-2 border-(--bg-surface)
+         bg-(--bg-subtle) -ml-3 flex items-center justify-center
+         text-xs font-medium text-(--text-muted);
+}
+
+/* ---- Accessibility: Forced Colors Mode (High Contrast) ---- */
+/* Provides explicit outlines when system colors override defaults */
+@media (forced-colors: active) {
+  .presence-dot {
+    /* Use outline for visibility in high contrast */
+    outline: 2px solid CanvasText;
+    outline-offset: 1px;
+    /* Prevent system from overriding the dot's intended color difference indication */
+    forced-color-adjust: none;
+    /* Background might become transparent, border ensures visibility */
+    /* Note: border-(--variable) shorthand doesn't apply here as it's not in @apply */
+    border-color: CanvasText;
+  }
+
+  .presence-dot.typing {
+    /* Make typing visually distinct even without animation/color */
+     outline-style: dotted; /* Example: Use style difference */
+     /* Or use a specific system color if appropriate, but outline difference is often safer */
+     /* background-color: Highlight; */
+  }
+
+  .presence-dot.away {
+      outline-style: dashed; /* Example: Use style difference */
+      /* background-color: GrayText; */
+  }
+
+  .online-friend-chip:focus-visible {
+    /* Standard high contrast focus outline */
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    forced-color-adjust: auto; /* Allow system focus colors */
+  }
+
+  .online-friends-shelf .avatar-stack .avatar,
+  .online-friends-shelf .avatar-stack .more-count {
+     /* Ensure borders are visible in high contrast */
+     outline: 1px solid CanvasText;
+     /* Note: border-(--variable) shorthand doesn't apply here as it's not in @apply */
+     border-color: CanvasText;
+  }
+}/* ========================================
+   Presence Shelf Components Styles - src/styles/presence.css
+   ======================================== */
+
+/*
+ * IMPORTANT: This file needs to be imported into your main CSS entry point
+ * (e.g., src/styles/globals.css, src/styles/index.css, or loaded in your root layout)
+ * for Vite/Next.js/etc. to bundle it.
+ *
+ * Example:
+ * // in globals.css or index.css
+ * @import './presence.css';
+ *
+ * SYNTAX NOTE (Tailwind v4+):
+ * This file utilizes the new Tailwind v4 shorthand for CSS variables within
+ * @apply directives. For example:
+ * - `bg-(--bg-subtle)` instead of `bg-[var(--bg-subtle)]`
+ * - `border-(--border-muted)` instead of `border-[var(--border-muted)]`
+ * This shorthand automatically expands to `bg-[var(--variable-name)]`,
+ * passes Tailwind’s stricter parser, and keeps utility classes concise.
+ * Ensure you are using a compatible Tailwind CSS version.
+ */
+
+/*
+ * The :root block containing light theme variables has been removed
+ * to allow globally defined variables (e.g., for dark theme in global.css)
+ * to take precedence.
+ */
+
+/* ---- Animation Keyframes ---- */
+/* Unique prefix 'asr-' used to reduce potential collision risk */
+@keyframes asr-typing-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+/* ---- OnlineFriendChip component ---- */
+.online-friend-chip {
+  /* Using Tailwind v4 shorthand: bg-(--variable), border-(--variable) */
+  /* These variables should now resolve to your global theme values */
+  @apply relative flex items-center gap-2 px-3 py-1.5 rounded-full
+         bg-(--bg-subtle) border border-(--border-muted)
+         transition-all cursor-pointer select-none;
+}
+.online-friend-chip:hover {
+  /* Using Tailwind v4 shorthand: bg-(--variable), shadow-(--variable) */
+  @apply bg-(--bg-muted) shadow-(--shadow-subtle);
+}
+.online-friend-chip:focus-visible {
+  /* Standard focus outline, accessibility handled below for forced-colors */
+  /* Using Tailwind v4 shorthand: ring-(--variable), ring-offset-(--variable) */
+  @apply outline-none ring-2 ring-offset-2 ring-(--color-focus-ring) ring-offset-(--bg-surface);
+}
+
+/* ---- Presence Dot Styles ---- */
+.presence-dot {
+  /* Using Tailwind v4 shorthand: bg-(--variable), border-(--variable) */
+  @apply absolute size-2.5 rounded-full bg-(--color-success-green-500)
+         -right-0.5 -bottom-0.5 border-2 border-(--bg-surface) z-10;
+  /* Define animation properties using variables (defined elsewhere or fallback) */
+  --asr-typing-pulse-duration: 1s;      /* Default or override */
+  --asr-typing-pulse-timing: cubic-bezier(0.4, 0, 0.6, 1); /* Default or override */
+}
+
+.presence-dot.away {
+  /* Using Tailwind v4 shorthand: bg-(--variable) */
+  @apply bg-(--color-value-amber-500);
+  /* Ensure away state overrides any potential animation */
+  animation: none;
+}
+
+/* Base style for typing dot (color change) - applies regardless of motion preference */
+.presence-dot.typing {
+    /* Using Tailwind v4 shorthand: bg-(--variable) */
+    @apply bg-(--agent-color-primary);
+}
+
+/* ---- Accessibility: Motion & Data Preferences ---- */
+
+/* Apply animation only if the user hasn't requested reduced motion */
+@media (prefers-reduced-motion: no-preference) {
+  .presence-dot.typing:not(.away) { /* Don't animate if also away */
+    animation: asr-typing-pulse var(--asr-typing-pulse-duration) var(--asr-typing-pulse-timing) infinite;
+  }
+}
+
+/* Explicitly disable animation if the user has requested reduced data */
+@media (prefers-reduced-data: reduce) {
+  .presence-dot.typing {
+    animation: none;
+  }
+}
+
+
+/* ---- OnlineFriendsShelf component ---- */
+.online-friends-shelf {
+  /* Using Tailwind v4 shorthand: bg-(--variable), border-(--variable), shadow-(--variable) */
+  @apply flex items-center gap-2 px-3 py-2
+         bg-(--bg-surface) border border-(--border-muted)
+         rounded-lg shadow-(--shadow-subtle);
+}
+.online-friends-shelf .avatar-stack {
+  @apply flex items-center;
+}
+.online-friends-shelf .avatar-stack .avatar {
+  /* Using Tailwind v4 shorthand: border-(--variable), bg-(--variable) */
+  @apply relative size-8 rounded-full border-2 border-(--bg-surface)
+         bg-(--bg-subtle) -ml-3 first:ml-0
+         transition-all overflow-hidden;
+}
+.online-friends-shelf .avatar-stack .more-count {
+  /* Using Tailwind v4 shorthand: border-(--variable), bg-(--variable), text-(--variable) */
+  @apply relative size-8 rounded-full border-2 border-(--bg-surface)
+         bg-(--bg-subtle) -ml-3 flex items-center justify-center
+         text-xs font-medium text-(--text-muted);
+}
+
+/* ---- Accessibility: Forced Colors Mode (High Contrast) ---- */
+/* Provides explicit visual cues when system colors override defaults */
+@media (forced-colors: active) {
+  .presence-dot {
+    /* Use border instead of outline for reliable rendering on rounded shapes. */
+    /* Use CanvasText for the system high-contrast border color. */
+    /* Use Canvas background to ensure contrast behind the border. */
+    border: 2px solid CanvasText;
+    background-color: Canvas;
+    /* Prevent system from overriding the dot's intended indicator style differences (below) */
+    forced-color-adjust: none;
+    /* Remove properties related to the old outline approach */
+    /* outline: none; */
+    /* outline-offset: 0; */
+  }
+
+  .presence-dot.typing {
+    /* Use border style difference for typing state */
+    /* Note: Colors like 'Highlight' might be tempting but could clash */
+    /* with focus indicators or not provide enough differentiation. */
+    border-style: dotted;
+    /* background-color: Highlight; */ /* Avoid using colors if possible */
+  }
+
+  .presence-dot.away {
+    /* Use border style difference for away state */
+     border-style: dashed;
+     /* background-color: GrayText; */ /* Avoid using colors if possible */
+  }
+
+  /* Keep standard outline for focus on the chip itself */
+  .online-friend-chip:focus-visible {
+    outline: 2px solid Highlight; /* System focus color */
+    outline-offset: 2px;
+    /* Allow system focus colors styles */
+    forced-color-adjust: auto;
+    /* Ensure no lingering custom border interferes */
+    border-color: transparent;
+  }
+
+  .online-friends-shelf .avatar-stack .avatar,
+  .online-friends-shelf .avatar-stack .more-count {
+     /* Use border instead of outline for reliable rendering on rounded shapes */
+     /* Ensure the avatar shapes are clearly visible */
+     border: 1px solid CanvasText;
+     background-color: Canvas; /* Ensure contrast */
+     /* Allow content within avatars to adjust if needed, but maintain border */
+     /* forced-color-adjust: auto; */ /* Usually default, keep unless needed */
+  }
+}

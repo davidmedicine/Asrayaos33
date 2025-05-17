@@ -1,0 +1,158 @@
+/* ========================================
+   Base HTML Element Styles & Global Rules
+   Imported AFTER Tailwind + Variables.
+   ======================================== */
+
+   @layer base {
+    /* Apply fundamental resets and base styles */
+    :root {
+      color-scheme: dark; /* Default to dark browser UI (scrollbars, etc.) */
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+      -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
+      @apply font-body; /* Apply base font from @theme */
+    }
+  
+    /* Ensure box-sizing is applied universally (Tailwind v4 might do this, but explicit is safe) */
+    *, ::before, ::after {
+      box-sizing: border-box;
+      border-width: 0; /* Reset border width */
+      border-style: solid; /* Reset border style */
+      border-color: theme('borderColor.DEFAULT', currentColor); /* Reset border color (TW default) */
+    }
+    /* DELETED: Original border reset `border: 0 solid ...` was removed as it was causing issues */
+  
+    body {
+      @apply bg-[var(--bg-body)] text-[var(--text-default)]; /* Use CSS vars for base theme */
+      min-height: 100dvh; /* Use dynamic viewport height */
+      width: 100%;
+      overflow-x: hidden; /* Prevent horizontal scroll */
+      font-size: 1rem; /* Base font size */
+      line-height: 1.6; /* Base line height */
+      -webkit-font-smoothing: antialiased; /* Improve font rendering on WebKit */
+      -moz-osx-font-smoothing: grayscale; /* Improve font rendering on Firefox */
+      touch-action: manipulation; /* Improve touch interaction responsiveness */
+      /* Smooth theme transitions */
+      transition-property: background-color, color;
+      transition-duration: var(--duration-normal); /* Use theme duration */
+      transition-timing-function: var(--ease-in-out); /* Use theme easing */
+    }
+  
+    /* Base typography using theme fonts and logical margins */
+    h1, h2, h3, h4, h5, h6 {
+      @apply font-display text-[var(--text-heading)]; /* Use display font and heading color */
+      font-variation-settings: 'wght' 600; /* Default heading weight (example) */
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      margin-block-start: 0; /* Logical property */
+      margin-block-end: calc(var(--spacing) * 2); /* 1rem margin below headings (8pt grid) */
+    }
+  
+    /* Apply responsive heading sizes via utilities */
+    h1 { @apply text-3xl; } /* 30px */
+    h2 { @apply text-2xl; } /* 24px */
+    h3 { @apply text-xl; } /* 20px */
+    h4 { @apply text-lg; } /* 18px */
+    h5 { @apply text-base; } /* 16px */
+    h6 { @apply text-base; } /* 16px */
+  
+    p {
+      @apply text-base max-sm:text-sm leading-[1.7] text-[var(--text-default)]; /* Responsive text size */
+      margin-block-start: 0; /* Logical property */
+      margin-block-end: calc(var(--spacing) * 2); /* 1rem margin below paragraphs (8pt grid) */
+    }
+  
+    a {
+      @apply text-[var(--agent-color-primary)] underline decoration-[var(--agent-color-primary)/50] underline-offset-2 transition;
+      &:hover {
+        @apply decoration-[var(--agent-color-primary)];
+      }
+    }
+  
+    /* Minimal form reset */
+    button, input, textarea, select {
+      font: inherit;
+      color: inherit;
+      margin: 0;
+      padding: 0;
+      border: none; /* Explicitly remove border */
+      background: none; /* Explicitly remove background */
+      outline: none; /* Focus handled by :focus-visible */
+    }
+    button {
+      cursor: pointer;
+      text-align: inherit;
+    }
+    textarea {
+      resize: vertical; /* Allow vertical resize only */
+    }
+  
+    /* Base Agent Theme Definitions */
+    .theme-oracle {
+      --agent-color-primary: var(--color-wisdom-indigo-500);
+      --agent-color-secondary: var(--color-wisdom-indigo-400);
+      --agent-avatar-gradient: radial-gradient( circle, color-mix(in oklch, var(--color-wisdom-indigo-500) 20%, var(--bg-muted)), color-mix(in oklch, var(--color-wisdom-indigo-400) 10%, var(--bg-subtle)) );
+    }
+    .theme-muse {
+      --agent-color-primary: var(--color-create-magenta-500);
+      --agent-color-secondary: var(--color-create-magenta-400);
+      --agent-avatar-gradient: radial-gradient( circle, color-mix(in oklch, var(--color-create-magenta-500) 20%, var(--bg-muted)), color-mix(in oklch, var(--color-create-magenta-400) 10%, var(--bg-subtle)) );
+    }
+    /* Add other .theme-* definitions here */
+  
+    /* Global Accessibility Focus Styles (WCAG 2.2 Compliant) */
+    :focus-visible {
+      @apply outline-none rounded-sm; /* Base outline reset + minor rounding */
+      /* Use CSS variables for consistent ring */
+      box-shadow: 0 0 0 var(--focus-ring-width) var(--bg-body), /* Inner ring matching body bg */
+                  0 0 0 calc(var(--focus-ring-width) + var(--focus-ring-offset)) var(--focus-ring-color); /* Outer colored ring */
+      /* Note: box-shadow used for better handling of `overflow:hidden` and `border-radius` compared to outline+offset */
+    }
+    /* DELETED: Removed .focusable-element class, rely on :focus-visible */
+  
+    /* Styling for invalid form fields */
+    input:invalid, textarea:invalid, select:invalid {
+      /* Subtle indication, focus ring will highlight more on focus */
+      @apply border-[var(--color-danger-red-500)]; /* Assumes elements have a base border */
+      /* Optional: Add a subtle ring when not focused */
+      /* box-shadow: 0 0 0 1px var(--color-danger-red-500); */
+    }
+    /* Ensure :focus-visible overrides invalid styles for focused invalid fields */
+    input:invalid:focus-visible,
+    textarea:invalid:focus-visible,
+    select:invalid:focus-visible {
+       border-color: var(--focus-ring-color); /* Or keep red border but show focus ring */
+       /* Ensure focus ring shadow takes precedence */
+       box-shadow: 0 0 0 var(--focus-ring-width) var(--bg-body),
+                   0 0 0 calc(var(--focus-ring-width) + var(--focus-ring-offset)) var(--focus-ring-color);
+    }
+  
+  
+    /* Styling for aria-current */
+    [aria-current="page"], [aria-current="step"] {
+      @apply font-semibold text-[var(--agent-color-primary)] relative;
+      /* Optional: Add visual indicator like an underline or dot */
+      /* &::after { content: ''; @apply absolute bottom-[-0.25rem] start-0 w-full h-px bg-[var(--agent-color-primary)]; } */
+    }
+  
+    /* Basic Print Styles */
+    @media print {
+      body {
+        background: white !important;
+        color: black !important;
+        font-size: 10pt; /* Adjust as needed */
+      }
+      /* Hide non-essential elements */
+      .no-print, header, footer, nav, aside, [role="dialog"], [role="tooltip"] {
+        display: none !important;
+      }
+      /* Ensure content breaks nicely */
+      img, svg { max-width: 100% !important; break-inside: avoid; }
+      h1, h2, h3 { break-after: avoid; }
+      p, blockquote { break-inside: avoid; }
+      a { color: inherit !important; text-decoration: none !important; }
+      a[href^="http"]:after { content: " (" attr(href) ")"; font-size: 0.8em; }
+      .page-break { page-break-before: always; }
+      .chat-message { break-inside: avoid; }
+    }
+  }

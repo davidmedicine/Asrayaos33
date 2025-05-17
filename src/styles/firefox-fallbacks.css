@@ -1,0 +1,91 @@
+/*
+ * Firefox Fallbacks for browsers <= 112
+ * Targets browsers that do NOT support oklch() color space.
+ * Provides RGBA alternatives for modern color functions used elsewhere (e.g., by Tailwind v4).
+ */
+ @supports not (color: oklch(0% 0 0)) { /* Changed query to specifically check for oklch support */
+
+  /* Root variable fallbacks */
+  :root {
+    /* Define base RGB channels used by multiple fallbacks to avoid invalid CSS warnings */
+    --bg-surface-rgb: 23, 23, 23;           /* Equivalent to #171717 */
+    /* --border-default-rgb: 55, 65, 81; */   /* Note: This was suggested but isn't used in the original snippet. Add if needed elsewhere. */
+
+    /* Agent color fallbacks using rgba alternatives */
+    /* The fallback value (e.g., 72, 41, 178) acts as a default if a theme doesn't override --agent-color-primary-rgb */
+    --agent-color-surface: rgba(var(--agent-color-primary-rgb, 72, 41, 178), 0.08);
+    --agent-color-border: rgba(var(--agent-color-primary-rgb, 72, 41, 178), 0.3);
+
+    /* Glow effect fallbacks */
+    /* Updated to use the --agent-color-primary-rgb variable defined per theme */
+    --glow-primary-xs: 0 0 6px 1px rgba(var(--agent-color-primary-rgb), 0.4);
+
+    /* Specific named glow fallbacks (could potentially be DRYed further if colors align) */
+    --glow-wisdom-subtle: 0 0 8px 2px rgba(87, 70, 175, 0.35);
+    --glow-wisdom-medium: 0 0 16px 4px rgba(87, 70, 175, 0.45);
+    --glow-create-subtle: 0 0 8px 2px rgba(214, 51, 108, 0.35);
+    --glow-create-medium: 0 0 16px 4px rgba(214, 51, 108, 0.45);
+    --glow-value-subtle: 0 0 8px 2px rgba(245, 158, 11, 0.4);
+    --glow-value-medium: 0 0 16px 4px rgba(245, 158, 11, 0.5);
+  }
+
+  /* Agent theme fallbacks */
+  /* Each theme defines its primary RGB color */
+  .theme-oracle {
+    --agent-color-primary-rgb: 72, 41, 178; /* #4829B2 */
+    --agent-avatar-gradient: radial-gradient(circle, rgba(72, 41, 178, 0.2), rgba(87, 70, 175, 0.1));
+  }
+
+  .theme-muse {
+    --agent-color-primary-rgb: 214, 51, 108; /* #D6336C */
+    --agent-avatar-gradient: radial-gradient(circle, rgba(214, 51, 108, 0.2), rgba(236, 72, 153, 0.1));
+  }
+
+  .theme-witness {
+    --agent-color-primary-rgb: 75, 85, 99; /* #4B5563 */
+    --agent-avatar-gradient: radial-gradient(circle, rgba(75, 85, 99, 0.2), rgba(100, 116, 139, 0.1));
+  }
+
+  .theme-navigator {
+    --agent-color-primary-rgb: 59, 130, 246; /* #3B82F6 */
+    --agent-avatar-gradient: radial-gradient(circle, rgba(59, 130, 246, 0.2), rgba(96, 165, 250, 0.1));
+  }
+
+  .theme-scribe {
+    --agent-color-primary-rgb: 16, 185, 129; /* #10B981 */
+    --agent-avatar-gradient: radial-gradient(circle, rgba(16, 185, 129, 0.2), rgba(52, 211, 153, 0.1));
+  }
+
+  .theme-seeker {
+    --agent-color-primary-rgb: 245, 158, 11; /* #F59E0B */
+    --agent-avatar-gradient: radial-gradient(circle, rgba(245, 158, 11, 0.2), rgba(251, 191, 36, 0.1));
+  }
+
+  .theme-editor {
+    --agent-color-primary-rgb: 139, 92, 246; /* #8B5CF6 */
+    --agent-avatar-gradient: radial-gradient(circle, rgba(139, 92, 246, 0.2), rgba(167, 139, 250, 0.1));
+  }
+
+  /* Component fallbacks */
+  .glassmorphic {
+    /* Uses the --bg-surface-rgb defined in :root */
+    background-color: rgba(var(--bg-surface-rgb), 0.75);
+  }
+
+  /* Message bubble fallbacks */
+  .message-bubble.assistant {
+    /* Uses the --agent-color-primary-rgb defined per theme */
+    border-color: rgba(var(--agent-color-primary-rgb), 0.35);
+  }
+
+  /* Animation fallbacks for prefers-reduced-motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+      transition-delay: 0ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

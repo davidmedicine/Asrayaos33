@@ -1,0 +1,75 @@
+/* ========================================
+   CSS Variables (Non-Theme) & Base Layer Setup
+   Imported BEFORE Tailwind CSS.
+   ======================================== */
+
+   @layer base {
+    /* Define base :root variables not managed by @theme */
+    :root {
+      /* Core Settings & Scales */
+      --spacing: 0.5rem; /* Base for 8-point grid (1 unit = 8px). Tailwind generates p-1, m-2 etc. from this. */
+      --radius: 0.625rem; /* Default border radius (10px) */
+      --anim-enable: 1; /* Flag for JS checks if needed, 0 when reduced motion */
+  
+      /* Layout specific */
+      --sidebar-width-expanded: 15rem; /* 240px */
+      --sidebar-width-minimized: 4.5rem; /* 72px */
+  
+      /* Focus Ring - WCAG AA compliant by default */
+      --focus-ring-color: oklch(60% 0.2 260); /* Accessible blue/purple on dark bg */
+      --focus-ring-width: 2px;
+      --focus-ring-offset: 2px; /* Offset from element */
+  
+      /* Glow Effects (Complex shadows not suitable for @theme) */
+      /* Using color-mix for consistency and theme awareness */
+      --glow-primary-xs: 0 0 6px 1px color-mix(in oklch, var(--agent-color-primary, var(--color-wisdom-indigo-500)) 40%, transparent);
+      --glow-primary-sm: 0 0 10px 2px color-mix(in oklch, var(--agent-color-primary, var(--color-wisdom-indigo-500)) 45%, transparent);
+      --glow-wisdom-subtle: 0 0 8px 2px color-mix(in oklch, var(--color-wisdom-indigo-400) 35%, transparent);
+      --glow-wisdom-medium: 0 0 16px 4px color-mix(in oklch, var(--color-wisdom-indigo-400) 45%, transparent);
+      --glow-create-subtle: 0 0 8px 2px color-mix(in oklch, var(--color-create-magenta-400) 35%, transparent);
+      --glow-create-medium: 0 0 16px 4px color-mix(in oklch, var(--color-create-magenta-400) 45%, transparent);
+      --glow-value-subtle: 0 0 8px 2px color-mix(in oklch, var(--color-value-amber-400) 40%, transparent);
+      --glow-value-medium: 0 0 16px 4px color-mix(in oklch, var(--color-value-amber-400) 50%, transparent);
+      --glow-danger-medium: 0 0 12px color-mix(in oklch, var(--color-danger-red-500) 50%, transparent); /* Added for consistency */
+  
+      /* Base Theme Variables (Dark Theme Default - overridden by .light if needed) */
+      --bg-body: var(--color-slate-deep-950); /* Base page background */
+      --bg-surface: var(--color-slate-surface-900); /* Cards, panels, inputs background */
+      --bg-subtle: var(--color-mineral-gray-700); /* Slightly lighter bg, secondary buttons */
+      --bg-muted: var(--color-mineral-gray-600); /* Even lighter, hover states, borders */
+      --bg-hover: var(--color-mineral-gray-600); /* Default hover background */
+      --text-default: var(--color-starlight-100); /* Primary text */
+      --text-muted: var(--color-starlight-300); /* Secondary/placeholder text */
+      --text-heading: var(--color-starlight-100); /* Heading text */
+      --text-subtle: var(--color-starlight-300); /* Subtle text */
+      --border-default: var(--color-mineral-gray-600); /* Default borders for components */
+      --border-muted: var(--color-mineral-gray-700); /* Subtle borders, dividers */
+      --agent-color-primary: var(--color-wisdom-indigo-500); /* Default primary agent color */
+      --agent-color-secondary: var(--color-create-magenta-500); /* Default secondary agent color */
+      --agent-avatar-gradient: radial-gradient(circle, var(--bg-muted), var(--bg-subtle)); /* Default avatar background */
+    }
+  
+    /* Example Light Theme Override (if needed, apply class="light" to html) */
+    /* html.light { */
+      /* color-scheme: light; */
+      /* --focus-ring-color: #005A9C; */ /* WCAG AA on light */
+      /* Define light theme variable overrides here... */
+    /* } */
+  
+    /* Reduced Motion Preferences */
+    @media (prefers-reduced-motion: reduce) {
+      :root {
+        --anim-enable: 0; /* Signal disabled animations to JS if needed */
+      }
+      /* Globally disable animations and transitions */
+      *, ::before, ::after {
+        animation-delay: -1ms !important;
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        background-attachment: initial !important;
+        scroll-behavior: auto !important;
+        transition-delay: 0s !important;
+        transition-duration: 0s !important;
+      }
+    }
+  }

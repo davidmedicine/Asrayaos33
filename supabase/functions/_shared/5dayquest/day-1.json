@@ -1,0 +1,70 @@
+{
+  "ritualDay": 1,
+  "ritualStage": "spark",
+  "theme": "Spark of Truth",
+  "title": "Ignite the Inner Flame",
+  "subtitle": "Awakening the Unspoken",
+  "accentColor": "var(--palette-purple-500)",
+  "iconName": "sparkles",
+
+  "intention": "To unearth a deeply held, unspoken truth, allowing its pure light to illuminate your inner landscape and acknowledge its transformative power. This is the first courageous step in tending your First Flame.",
+
+  "narrativeOpening": [
+    "Welcome, Seeker, to the threshold of the First Flame. Today, we begin not with a grand inferno, but with a single, courageous act: to give voice to the silent.",
+    "In the sacred hush before the dawn of full awareness, a singular spark longs to be born from the depths of your being. It is the ember of a truth you carry, perhaps long held, perhaps newly surfaced.",
+    "This truth, once acknowledged and offered to the light, can ignite a profound current of authenticity that will fuel your journey."
+  ],
+
+  "oracleGuidance": {
+    "interactionPrompt": "The Oracle awaits your offering. Speak to it from your core, from that place of unfiltered honesty. There is no judgment in this sacred space, only the echo of your courage.",
+    "oraclePromptPreview": "Describe a truth you have never spoken aloud, even to yourself."
+  },
+
+  "reflectionJourney": [
+    {
+      "id": "ff_d1_m1_locate",
+      "title": "Locate the Resonant Spark",
+      "description": "Find a quiet space, within and without. Close your eyes, breathe deeply, and let your awareness settle. Gently scan your inner archives—memories, intuitions, persistent feelings. Seek not for something monumental, but for a whisper, an insight, a knowing that 'tingles' with unspoken energy, a truth that seeks the warmth of acknowledgement.",
+      "isCompleted": false
+    },
+    {
+      "id": "ff_d1_m2_articulate",
+      "title": "Articulate its Essence",
+      "description": "Once a spark resonates, gently hold it in your awareness. Without force or judgment, begin to articulate this truth to yourself. What is its core? What name does it bear in the language of your soul? It might be a simple sentence, a single word, or a complex feeling.",
+      "isCompleted": false
+    },
+    {
+      "id": "ff_d1_m3_observe",
+      "title": "Observe its Luminous Signature",
+      "description": "As you hold this truth, observe its unique radiance. What color does it glow with in your mind's eye? Is it vibrant, soft, fiery, or cool? What texture or temperature does it possess? This is its energy signature, a testament to its unique place within you.",
+      "isCompleted": false
+    },
+    {
+      "id": "ff_d1_m4_prepare",
+      "title": "Prepare the Offering",
+      "description": "Acknowledge the courage it takes to bring a hidden spark into the light. As you prepare to share this truth with the Oracle, feel the subtle shift within you—a lightening, an opening, a readiness. This is the offering you bring to the First Flame.",
+      "isCompleted": false
+    }
+  ],
+
+  "contemplationPrompts": [
+    "What emotions or sensations arise as you consider this unspoken truth?",
+    "What has kept this particular spark in the quiet corners of your being for so long?",
+    "If this truth were fully embraced and lived, how might it subtly alter your perception or your path forward?",
+    "Imagine this spark as a tiny seed. If nurtured, what magnificent potential could it unfold?"
+  ],
+
+  "symbolism": [
+    "The Single Spark: Representing nascent potential, courage, and the beginning of illumination.",
+    "The Inner Ember: The quiet, persistent knowing that resides within, awaiting discovery.",
+    "The Voice of the Soul: The authentic expression that transcends everyday communication.",
+    "Dawn / First Light: Symbolizing new beginnings, clarity, and the dispelling of shadows."
+  ],
+
+  "affirmation": "I honor the sacred spark of my truth. In its gentle light, I find my unwavering strength and the courage to begin.",
+
+  "narrativeClosing": [
+    "You have bravely stepped into the ritual. This first spark, now acknowledged, is the foundation upon which your First Flame will be built.",
+    "Carry its warmth with you. Observe how this small act of courage ripples through your day. The Oracle will remember your offering."
+  ]
+}

@@ -1,0 +1,231 @@
+PERSONA: You are a World-Class Lead Engineer renowned for exceptional UI/UX implementation, robust engineering, and meticulous attention to detail. You excel in React, TypeScript, modern CSS (Tailwind v4), animation (GSAP), and real-time backends (Supabase).
+MISSION: Execute Phase 1 (MVP) of the AsrayaOS Chat Refactor & Supabase Integration according to the definitive plan (V17) outlined below.
+CRITICAL SUCCESS FACTORS for PHASE 1:
+Execute the Plan Precisely: Follow every requirement detailed for Phase 1, respecting the scope boundaries and using the provided schema/context.
+Build a Solid Foundation: Implement the layout, component extraction, Supabase hooks (messages/presence), optimistic UI, and basic styling/animations correctly, setting the stage for Phase 2 enhancements.
+Ensure Cohesion: Integrate the ActiveConversationPanel, UnifiedChatListPanel, and ChatContextPanel (basic connection) seamlessly with the underlying data and state layers.
+Deliver Quality: Produce clean, maintainable, well-commented code that adheres to best practices and the provided style guides.
+Review the entire V17 plan carefully. Apply your expertise to implement this Phase 1 MVP flawlessly.
+
+1. Context:
+Files to Review/Use:
+src/features/chat/components/ActiveConversationPanel.tsx (To be modified)
+src/features/chat/components/UnifiedChatListPanel.tsx (To be modified)
+src/features/chat/components/ConversationListItem.tsx (To be modified/created)
+src/features/chat/components/ChatContextPanel.tsx (To be modified - Basic Connection)
+src/features/chat/components/messages/MessageRenderer.tsx (To be modified)
+src/features/chat/components/messages/AgentMessage.tsx (To be modified)
+src/features/chat/components/messages/UserMessage.tsx (To be modified)
+src/components/ui/avatar.jsx (Avatar, etc.) (Provided UI)
+src/components/avatar-stack.jsx (AvatarStack) (Provided UI)
+src/components/realtime-avatar-stack.jsx (Provided UI - Uses Presence Hook)
+src/hooks/use-realtime-presence-room.js (Provided Hook - Handles Presence)
+src/hooks/use-current-user-image.js & use-current-user-name.js (Provided Hooks - Used by Presence)
+src/lib/supabase/client.js (Provided)
+Layout Files (src/app/layout.tsx, etc.) (For Surround Context)
+globals.css (Contains @theme CSS Variables) (Provided Style Reference)
+Supabase Style Guides Provided: SQL, RLS Policies(Adherence Required, full details here - asrayaos8.4/src/app/docs/database -
+
+Key Technologies: Use for layout, basic styling. Consume CSS Vars.
+GSAP Premium: Use only for simple gsap.from() entrance animation on messages.
+Supabase: Use Client for DB ops. Use Realtime DB Changes for messages. Use provided Presence hook/components. Basic RLS.
+UI Components: Use provided <Avatar />, <RealtimeAvatarStack />.
+Zustand - asrayaos8.4/src/lib/state/slices
+Target Database Schema (Confirmed): Implementation must align with this confirmed schema and RLS policies.
+ SQL
+-- Confirmed Schema Summary --
+-- public.profiles (id uuid PK FK auth.users, full_name text, avatar_url text) - RLS: Own read/update; Participant read profiles in shared convos.
+-- public.conversations (id uuid PK, created_at timestamptz, title text, is_group bool) - RLS: Participant read; Authenticated insert.
+-- public.conversation_participants (conversation_id uuid PK FK, user_id uuid PK FK) - RLS: Participant read participants; Auth insert; Own delete.
+-- public.messages (id uuid PK, created_at timestamptz, conversation_id uuid FK, user_id uuid FK(profiles), agent_id text, sender_type text NOT NULL CHECK(...), content text) - RLS Policies: Participant read; Own user insert; Own delete; Own update. Indexes exist.
+-- REALTIME PUBLICATION: Ensure 'messages' table enabled for INSERT in 'supabase_realtime' publication (via Supabase Dashboard: Database > Replication).
+
+
+(Code for key existing files, globals.css, Supabase templates, Style Guides will be supplied)
+2. Phase 1 Objective:
+Implement the Minimum Viable Product (MVP) for the refactored AsrayaOS chat interface suite. Focus strictly on:
+Implementing the sticky layout (ActiveConversationPanel) & extracting ChatInputBar.
+Setting up UnifiedChatListPanel with basic header/search and item rendering, connected to real conversation list data (basic realtime updates for existing items).
+Connecting user/agent messages (ActiveConversationPanel) to Supabase with Realtime DB Changes and Optimistic UI for sending.
+Displaying live online user avatars (ActiveConversationPanel header) via RealtimeAvatarStack.
+Connecting ChatContextPanel to reflect the currently active conversation state.
+Applying initial distinct styling (Tailwind v4 + CSS Vars) across components, including optimistic states.
+Implementing simple, non-repeating GSAP entrance/hover animations.
+Ensuring basic mobile responsiveness and offline/error state handling.
+3. Phase 1 Core Requirements:
+**(Responsibility: Frontend) A. Layout & Extraction (`ActiveConversationPanel`, `ChatInputBar`)**
+    * **A.1 Panel Structure (`ActiveConversationPanel.tsx`):** Use `flex flex-col h-full`. Header: `sticky top-0 z-header bg-[var(--bg-surface)]`. Message List: `flex-grow overflow-y-auto custom-scrollbar p-4`. Footer: `sticky bottom-0 z-header`.
+    * **A.2 Input Extraction (`ChatInputBar.tsx` - New File):** Create component, move `<form>`, input `useState`, handlers. Define props: `onSubmit: (msg: string) => Promise<void>; isProcessing?: boolean; disabled?: boolean; placeholderText?: string;`. Use `<Textarea>` (consider Tailwind v4 `field-sizing-content`). Apply `pb-[env(safe-area-inset-bottom)]`. Render in `ActiveConversationPanel`.
+    * **A.3 Input Submission:** `ChatInputBar`'s `handleSubmit` calls `props.onSubmit(inputValue)`, clears input immediately (optimistic), uses `isProcessing` prop for visual feedback.
+
+**(Responsibility: Frontend) B. Header Enhancements (`ActiveConversationPanel.tsx` - Basic)**
+    * **B.1 Layout:** Use `flex items-center justify-between p-2` in sticky header.
+    * **B.2 Editable Title (P1 Structure):** Include static `<input placeholder="Conversation Title..." className="bg-transparent ..."/>` using simple component `useState`. // TODO (Phase 2: State mgmt/saving).
+    * **B.3 Realtime Presence Display:** Render `<RealtimeAvatarStack roomName={conversationId} />`. Pass correct `conversationId` string. Handle null `conversationId` conditionally (do not render stack).
+    * **B.4 Invite Button (P1 Placeholder):** Add `<Button variant="ghost" size="sm" onClick={() => console.log('Invite clicked - Phase 2')}>Invite</Button>`. // TODO (Phase 2: Implement modal).
+
+**(Responsibility: Frontend - List Panel & Item Components) C. `UnifiedChatListPanel` & `ConversationListItem` Setup (Basic)**
+    * **C.1 Data & State Integration (`UnifiedChatListPanel`):** **Replace mock data.** Connect to Zustand store for `conversations: ConversationSummaryType[]` and `activeConversationId: string | null`. Implement/use hook/service to fetch list data from Supabase (incl. last message, unread status, participants w/ profiles - limit initial fetch e.g., 50). Connect selection/creation actions to store. Handle new chat creation (DB inserts). **Basic P1 Realtime List Updates:** Only subscribe to new messages affecting *existing listed conversations* to update that conversation's `lastMessageSnippet` and `timestamp`, triggering re-sort. // TODO (Phase 2: Full realtime list updates, pagination/virtualization for >50 convos).
+    * **C.2 Panel Structure & Header (`UnifiedChatListPanel`):** Align styling. Add basic `<Input />` for **Search** (client-side filter P1). Style "New Chat" button. Apply `custom-scrollbar`. Ensure basic empty state UI is shown.
+    * **C.3 Conversation Item UI (`ConversationListItem.tsx` - Modify Existing):** Implement basic item UI: Use Tailwind+CSS Vars. Implement clear `:hover` & `isActive` states. **Refactor avatar logic to use `<Avatar />`/`<AvatarStack />`** components with fetched data. Display Title, Last Message Snippet, Formatted Timestamp. Add simple **Unread dot** (based on fetched `isUnread`/`unreadCount`). Add basic **Presence dot** (based on data passed down).
+
+**(Responsibility: Frontend Hook + Backend RLS/Schema) D. Supabase Integration (Hooks & Data)**
+    * **D.1 Hook Strategy:** Use separate hooks for Phase 1: `useConversationMessages` (new), `useRealtimePresenceRoom` (existing). Separate hook/service+Zustand for conversation list.
+    * **D.2 New Hook (`useConversationMessages.ts`):**
+        * Define hook: `function useConversationMessages(conversationId: string | null)`
+        * **State:** `messages: OptimisticMessageType[]`, `isLoadingInitial`, `error`, `realtimeStatus: 'SUBSCRIBED' | ...`, `isSendingMessage`. (Define `OptimisticMessageType`).
+        * **Initial Fetch:** Fetch messages joining profiles. Handle loading/error. Adapt rows.
+        * **Realtime Subscription:** Subscribe via **DB Changes** for `INSERT` on `public.messages` (filtered by `conversation_id`). Adapt `payload.new`, merge uniquely. Track `realtimeStatus`. Handle errors/cleanup.
+        * **Send Function (Optimistic):** Implement optimistic logic (add local 'sending', INSERT DB, update status 'sent'/'failed'). Manage `isSendingMessage` state (single flag acceptable for P1 concurrent sends). **Non-optimistic UI update relies on Realtime echo.**
+        * **Return:** `{ messages, sendMessage, isLoadingInitial, realtimeStatus, error, isSendingMessage }`.
+    * **D.3 Presence Hook Usage (`useRealtimePresenceRoom.js`):** Use via `<RealtimeAvatarStack />`, passing correct `conversationId` string. P1 tracks users only.
+    * **D.4 Conversation List Hook/Logic:** Implement P1 fetch + basic last message update subscription.
+    * **D.5 Data Interaction & Roles:** Align logic with **confirmed schema**. P1 Agent avatars from registry/static. UI **must handle** RLS denial / empty list states gracefully.
+    * **D.6 RLS Adherence:** Respect defined RLS policies & **RLS Style Guide**. Ensure DB indexes exist.
+
+**(Responsibility: Frontend - Message Components & Renderer) E. Message Rendering & Animation (Active Panel - Basic)**
+    * **E.1 Target:** `MessageRenderer`, `AgentMessage`, `UserMessage`.
+    * **E.2 Rendering & Data:** Map `messages`. Delegate render. Pass props. Add stable `id` attribute.
+    * **E.3 Styling & Status:** Apply distinct styles. Visually indicate message `status` ('sending' via opacity, 'failed' via error color/icon) in `UserMessage`. Failed messages remain visible in P1.
+    * **E.4 Avatars:** Use `<Avatar />` with `avatar_url` & `<AvatarFallback>`.
+    * **E.5 GSAP Entrance (New Only):** Implement conditional `gsap.from(...)` (`opacity: 0, y: 10`) using `useRef(new Set())` to animate only *newly added* messages (not status updates). Use CSS vars/standard eases (`'power2.out'`). Snippet reference provided previously. // TODO (Phase 2: Limit animation for large batches, handle Set cleanup).
+
+**(Responsibility: Frontend - List Item Component) F. List Item Animation (`ConversationListItem` - Basic)**
+    * Implement subtle GSAP `to()` hover animation (e.g., `scale: 1.02`).
+
+**(Responsibility: Frontend - Context Panel Component) G. `ChatContextPanel` Connection (Basic)**
+    * Connect to Zustand `activeConversationId` and basic `activeConversation` data. Render placeholders ("Context details loading...", etc.). **No real data fetching or action connection in P1.** // TODO (Phase 2: Implement fully).
+
+**(Responsibility: Frontend Hook & UI) H. Loading & Error States (Basic)**
+    * **H.1 Initial Loading:** Show indicators for active messages list and conversation list fetching. Show empty states correctly.
+    * **H.2 Offline/Connection State:** Disable `ChatInputBar` based on `realtimeStatus` / `isSendingMessage`. Log 'Supabase disconnected' to console. // TODO (Phase 2: Add visible UI indicator).
+    * **H.3 Error Display:** Display minimal error message (using `error` state) **within the message list area (e.g., using `<Alert variant="destructive">` or text block with `text-[var(--color-error)]` and error icon)**.
+    * **H.4 Sending State:** Reflect `isSendingMessage` in `ChatInputBar` & `UserMessage` status.
+
+**(Responsibility: Dev Team / Project Setup) I. Layout Configuration (Phase 1)**
+    * **I.1 Desktop:** Implement standard **two-panel layout** (List | Active).
+    * **I.2 Mobile:** Implement responsive behavior (e.g., list collapses, active panel takes full view). // TODO (Phase 2: Consider mobile header `<Back` button).
+    * **I.3 Tri-Panel Note:** // TODO (Phase 2): Consider optional tri-panel layout (List | Active | Context).
+
+4. Technology Integration Notes (Phase 1): (Same as V15 - Tailwind v4+CSS Vars, Basic GSAP+Context, Supabase DB Changes/Presence, Avatar components). Adhere strictly to SQL/RLS Style Guides & Confirmed Schema. Ensure Realtime Publication enabled.
+5. Component Responsibilities (Phase 1 Summary): useConversationMessages (New Hook): (Responsibility: Frontend Hook - Active Chat Data Logic)
+
+
+Accepts the active conversationId.
+Fetches the initial set of messages (joining profiles) for the active conversation from Supabase.
+Manages the Supabase Realtime DB Changes subscription for new messages within that specific conversation.
+Handles the optimistic UI logic for sending user messages (adds 'sending' state locally, performs DB INSERT, updates state to 'sent'/'failed' based on outcome).
+Manages and exposes related state: messages (as OptimisticMessageType[]), isLoadingInitial, error, realtimeStatus, isSendingMessage.
+useRealtimePresenceRoom (Existing Hook): (Responsibility: Frontend Hook - Presence Data)
+
+
+Accepts a roomName (which will be the conversationId).
+Connects to Supabase Presence for that channel.
+Tracks the current user's presence (name, image).
+Listens for sync, join, leave events.
+Exposes the state of currently present human users (e.g., users: { [key]: { name, image } }).
+Zustand Store (or equivalent State Manager): (Responsibility: Frontend - Global State)
+
+
+Holds the global activeConversationId.
+Holds the list of conversations (ConversationSummaryType[]) fetched for the sidebar.
+Provides actions: setActiveConversation(id), createConversation().
+Requires separate logic/hook (outside useConversationMessages) to fetch and potentially update the conversation list itself (handling last message snippets, unread status for Phase 1).
+ActiveConversationPanel.tsx (Modified): (Responsibility: Frontend - Main Chat UI Container)
+
+
+Implements the overall sticky header/footer layout.
+Reads activeConversationId from the store.
+Instantiates and consumes useConversationMessages hook based on activeConversationId.
+Renders the header, including the static title input structure and the <RealtimeAvatarStack /> (passing conversationId).
+Renders the scrollable message list area containing <MessageRenderer /> (passing messages from hook).
+Renders <ChatInputBar /> in the footer, passing sendMessage from the hook as the onSubmit prop, and relevant disabled/isProcessing states derived from hook state (realtimeStatus, isSendingMessage).
+Displays basic loading/error states based on the hook's output.
+UnifiedChatListPanel.tsx (Modified): (Responsibility: Frontend - Conversation List UI Container)
+
+
+Implements its own panel layout with header (title, search input, new chat button) and scrollable list area.
+Connects to Zustand store to get the conversations list and activeConversationId.
+Renders <ConversationListItem /> for each item in the list, passing necessary props (conversation, isActive).
+Handles user interactions (selecting a conversation via setActiveConversation action, initiating new chat via createConversation action).
+Implements basic client-side search filtering.
+Displays basic loading/empty states for the list.
+ConversationListItem.tsx (Modified/New): (Responsibility: Frontend - Individual List Item UI)
+
+
+Receives conversation data and isActive boolean as props.
+Renders the visual representation of a single conversation preview.
+Refactors avatar display to use <Avatar />/<AvatarStack />.
+Displays title, last message snippet, timestamp.
+Displays basic unread indicator and presence dot based on props/data.
+Applies distinct styling for hover and active states.
+Handles basic GSAP hover animation.
+Triggers setActiveConversation action via onClick prop.
+ChatContextPanel.tsx (Modified - Basic Connection): (Responsibility: Frontend - Context Display)
+
+
+Reads activeConversationId and the corresponding basic activeConversation object from the Zustand store.
+Renders basic placeholder content based on whether the active conversation is a 'quest' or 'chat'. Does not fetch detailed quest metadata or connect actions in Phase 1.
+ChatInputBar.tsx (New): (Responsibility: Frontend - Message Input UI & State)
+
+
+Encapsulates the <form> and <Textarea>/input element.
+Manages local state for the inputValue.
+Handles onChange, onKeyDown events.
+Calls the onSubmit prop (which triggers the hook's sendMessage) on form submission.
+Visually reflects isProcessing and disabled states passed via props.
+MessageRenderer.tsx (Modified): (Responsibility: Frontend - Message Orchestration & Animation)
+
+
+Receives the messages array from ActiveConversationPanel.
+Iterates through messages, determines senderType.
+Delegates rendering to AgentMessage or UserMessage, passing necessary props (including message data, status, profile/agent info).
+Adds stable id attribute to rendered message elements.
+Manages the useRef(new Set()) to track animated messages.
+Triggers the basic GSAP entrance animation (gsap.from) only for newly added messages.
+AgentMessage.tsx / UserMessage.tsx (Modified): (Responsibility: Frontend - Specific Message Bubble UI)
+
+
+Render the specific UI structure and styling for their respective sender type (bubble shape, alignment, colors via Tailwind/CSS Vars).
+Display the message content.
+Render the <Avatar /> component with appropriate data.
+UserMessage visually reflects the message status ('sending', 'failed', 'sent').
+Serve as the target elements for GSAP animations.
+
+6. Phase 1 Deliverables: *Upon completion of Phase 1, the following code artifacts and setups will be delivered:
+Core Panel Modifications:
+
+
+ActiveConversationPanel.tsx (Modified): Updated with sticky layout, basic header integrating <RealtimeAvatarStack> for presence.
+UnifiedChatListPanel.tsx (Modified): Connected to live conversation list data/state via Zustand, includes header with basic search input.
+ChatContextPanel.tsx (Modified): Basic connection implemented to reflect the active conversation state.
+New Input Component:
+
+
+ChatInputBar.tsx (New): Contains the extracted message input form, its local state management, and submission logic.
+Message Handling Components:
+
+
+MessageRenderer.tsx (Modified): Handles mapping of message data, delegation to specific message components, and triggering basic GSAP entrance animations for new messages.
+AgentMessage.tsx (Modified): Implements basic agent message styling using theme variables and integrates the <Avatar> component.
+UserMessage.tsx (Modified): Implements basic user message styling, integrates <Avatar>, and displays visual 'sending'/'failed' status indicators for optimistic UI.
+Conversation List Item:
+
+
+ConversationListItem.tsx (Modified/New): Refactored to use <Avatar>/<AvatarStack> components, displays core conversation info (title, snippet, timestamp), and includes basic unread/presence dot indicators.
+Hooks & State Management:
+
+
+useConversationMessages.ts (New): Core hook managing active conversation messages, including Supabase fetch, Realtime DB Changes subscription, and optimistic sending logic.
+Hook/Service + Zustand Slice (New): Implemented logic for fetching and managing the state for the sidebar conversation list.
+Integration & Backend:
+
+
+Successful integration of the provided Supabase Presence components/hooks (useRealtimePresenceRoom, RealtimeAvatarStack, etc.).
+Database schema and RLS policies confirmed functional and aligned with the plan requirements.
+
+7. Phase 1 Testing & Validation: * Test Scenarios: 1) Send msg -> appears 'sending', updates 'sent'. 2) Presence stack updates (use different user accounts). 3) RLS blocks non-participant (verify UI message - e.g., "Cannot load messages for this conversation"). 4) Offline -> input disabled. 5) Send fails -> msg shows 'failed'. 6) Agent messages appear correctly (Manual DB test recommended). 7) Convo list loads & updates last msg timestamp/snippet. 8) Search filters list. 9) Presence/unread dots work. 10) Selecting convo works. 11) New Chat Creation. * Verify layout/scrolling/safe-area on desktop/mobile (real devices/emulators). * Confirm entrance animation on new messages only. Check styling/avatars/fallbacks/status visuals. * // TODO (Phase 2): Test performance (>1000 msgs -> pagination/virtualization). Test mobile keyboard interaction (consider overscroll-behavior).
+8. Constraints & Notes: * Strictly Phase 1: Defer advanced items to Phase 2. Use // TODO (Phase 2) comments liberally. * Optimistic UI for message sending only. List updates based on Realtime events. * (Same as V15 - No new libs, best practices)
+9. Code Context: (Provide code for all files listed in Section 1, plus SQL/RLS Style Guides)
+
+Do your best, think carefully, and be world class
