@@ -36,6 +36,6 @@ const LORE_DIR = path.resolve(process.cwd(), 'public/data/first-flame');
     console.error('\nAborting build: lore validation failed.\n');
     process.exit(1);
   } else {
-    console.log('All lore files valid ✔︎');
+  console.log('All lore files valid \u2714');
   }
 })();
