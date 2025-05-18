@@ -1,97 +1,131 @@
-/**********************************************************************
- * create-quest – Edge Function  (Deno)
- *********************************************************************/
-import { serve } from "https://deno.land/std@0.206.0/http/server.ts";
-import { createClient, type PostgrestError } from "https://esm.sh/@supabase/supabase-js@2";
+// deno-lint-ignore-file
+import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-//─────────────────────────────────────────────────────────────────────
-// 0.  Tiny helpers
-//─────────────────────────────────────────────────────────────────────
-const FN = "create-quest";
-const log = (lvl: "INFO" | "ERROR", msg: string, data?: unknown) =>
-  data ? console[lvl === "INFO" ? "log" : "error"](`[${FN}] [${lvl}] ${msg}`, data)
-       : console[lvl === "INFO" ? "log" : "error"](`[${FN}] [${lvl}] ${msg}`);
+/*────────────────────────  Shared utils  ───────────────────────*/
+import { createStandardHeaders, createHttpSuccessResponse, createHttpErrorResponse } from '../_shared/http.ts';
+import { log }                from '../_shared/logger.ts';
+import { maskAuthorizationHeader } from '../_shared/jwt.ts';
+import { flushSentryEvents }   from '../_shared/sentry.ts';
+import { LOG_STAGES }         from '../_shared/5dayquest/ritual.constants.ts';
 
-const CORS: HeadersInit = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST,OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Content-Type": "application/json",
-};
+/*────────────────────────  Config / ENV  ───────────────────────*/
+const FN       = 'get-flame-status';
+const SB_URL   = Deno.env.get('SUPABASE_URL');
+const SB_ANON  = Deno.env.get('SUPABASE_ANON_KEY');
+const SB_SVC   = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-const must = (k: string) => Deno.env.get(k) ?? (()=>{throw new Error(`Missing env ${k}`)})();
+if (!SB_URL || !SB_ANON || !SB_SVC) {
+  console.error(`[${FN}] FATAL – missing Supabase env vars`);
+  throw new Error('Server mis‑configuration');
+}
 
-//─────────────────────────────────────────────────────────────────────
-// 1.  Cold-start: env check
-//─────────────────────────────────────────────────────────────────────
-const SB_URL  = must("SUPABASE_URL");
-const SB_ANON = must("SUPABASE_ANON_KEY");          // auth / row-level
-const SB_SVC  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"); // optional admin
+const DEBUG = Deno.env.get(`DEBUG_${FN.toUpperCase().replace(/-/g, '_')}`) === 'true';
 
-//─────────────────────────────────────────────────────────────────────
-// 2.  Handler
-//─────────────────────────────────────────────────────────────────────
-serve(async req => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
-  if (req.method !== "POST")     return new Response(JSON.stringify({ error:"method" }), { status:405, headers:CORS });
+const STALE_MS      = 60_000;                 // 1‑min freshness
+const DAYDEF_BUCKET = 'asrayaospublicbucket'; // matches Modal worker
+const DAYDEF_PREFIX = '5-day/';               // keep in sync
+const DAY_1_PATH    = `${DAYDEF_PREFIX}day-1.json`;
 
-  log("INFO", "POST received");
+/*────────────────────────  Helpers  ────────────────────────────*/
+const decodeStorage = async (blob: unknown): Promise<string> =>
+  (blob && typeof (blob as Uint8Array).byteLength === 'number')
+    ? new TextDecoder().decode(blob as Uint8Array)
+    : await (blob as Blob).text();
 
-  // 2-A Auth ----------------------------------------------------------------
-  const jwt = req.headers.get("Authorization");
-  if (!jwt) {
-    log("ERROR", "Missing auth header");
-    return new Response(JSON.stringify({ error:"auth" }), { status:401, headers:CORS });
+/*────────────────────────  Handler  ────────────────────────────*/
+Deno.serve(async (req) => {
+  const t0 = performance.now();
+  const origin = req.headers.get('Origin');
+  const stdHeaders = createStandardHeaders(origin, { credentials: true });
+
+  if (req.method === 'OPTIONS')
+    return new Response('ok', { headers: stdHeaders });
+
+  if (req.method !== 'GET')
+    return createHttpErrorResponse(FN, 'METHOD_NOT_ALLOWED', 405, stdHeaders);
+
+  const authHdr = req.headers.get('Authorization') ?? '';
+  const authLog = maskAuthorizationHeader(authHdr);
+
+  if (!authHdr.startsWith('Bearer '))
+    return createHttpErrorResponse(FN, 'AUTH', 401, stdHeaders);
+
+  try {
+    /*── Supabase clients ───────────────────────────────────────*/
+    const sbUser = createClient(SB_URL, SB_ANON, {
+      global: { headers: { Authorization: authHdr } },
+      auth  : { persistSession: false },
+      db    : { schema: 'ritual' },
+    });
+
+    const sbAdmin = createClient(SB_URL, SB_SVC, {
+      auth: { persistSession: false },
+      db  : { schema: 'ritual' },
+    });
+
+    /*── Caller identity ───────────────────────────────────────*/
+    const { data: { user }, error: authErr } = await sbUser.auth.getUser();
+    if (authErr || !user?.id) throw Object.assign(authErr ?? new Error('AUTH'), { status: 401 });
+
+    /*── Progress (cheap) ──────────────────────────────────────*/
+    const { data: progress, error: pe } = await sbUser
+      .from('flame_progress')
+      .select('quest_id, current_day_target, updated_at')
+      .maybeSingle();
+
+    if (pe) throw Object.assign(pe, { status: 500 });
+
+    const isFresh =
+      progress && Date.now() - new Date(progress.updated_at).getTime() <= STALE_MS;
+
+    /*────────────────────  FRESH PATH  ───────────────────────*/
+    if (isFresh) {
+      const [ { data: imprints, error: ie }, { data: blob, error: se } ] = await Promise.all([
+        sbUser
+          .from('flame_imprints')
+          .select('day, payload_text, created_at')
+          .order('day'),
+        sbUser.storage.from(DAYDEF_BUCKET).download(DAY_1_PATH),
+      ]);
+
+      if (ie) throw Object.assign(ie, { status: 500 });
+      if (se || !blob) throw Object.assign(se ?? new Error('STORAGE'), { status: 500 });
+
+      const dayJson = JSON.parse(await decodeStorage(blob));
+
+      log('DEBUG', LOG_STAGES.EF_GET_FLAME_STATUS_CACHE_HIT, null, FN, DEBUG);
+      return createHttpSuccessResponse({
+        processing   : false,
+        dataVersion  : Date.now(),
+        progress,
+        imprints,
+        dayDefinition: dayJson,
+      }, 200, stdHeaders);
+    }
+
+    /*────────────────────  STALE PATH  ───────────────────────*/
+    await sbAdmin.functions.invoke('realtime-broadcast', {
+      body: {
+        channel: 'flame_status',
+        event  : 'missing',
+        payload: { user_id: user.id },
+      },
+    });
+
+    log('DEBUG', LOG_STAGES.EF_GET_FLAME_STATUS_CACHE_MISS, null, FN, DEBUG);
+    return createHttpSuccessResponse({ processing: true }, 202, stdHeaders);
+
+  } catch (err: unknown) {
+    const e   = err instanceof Error ? err : new Error(String(err));
+    const sc  = (e as any).status && (e as any).status >= 400 && (e as any).status < 600
+                ? (e as any).status
+                : 500;
+    log('ERROR', e.message, { stack: e.stack }, FN, true);
+    const resp = await createHttpErrorResponse(FN, (e as any).code ?? 'SERVER_ERROR', sc, stdHeaders, { maskedAuth: authLog }, e);
+    return resp;
+  } finally {
+    await flushSentryEvents(500);
+    if (DEBUG) log('DEBUG', `done in ${(performance.now() - t0).toFixed(1)} ms`, null, FN, true);
   }
-  const sb = createClient(SB_URL, SB_ANON, { global:{ headers:{ Authorization:jwt }}});
-  const { data:{ user }, error:authErr } = await sb.auth.getUser();
-  if (authErr || !user) {
-    log("ERROR", "Auth failed", authErr);
-    return new Response(JSON.stringify({ error:"auth" }), { status:401, headers:CORS });
-  }
-  log("INFO", `User ${user.id}`);
-
-  // 2-B Body  ---------------------------------------------------------------
-  let body: any = {};
-  try { body = await req.json(); }
-  catch { log("ERROR","Bad JSON"); return new Response(JSON.stringify({ error:"json" }), { status:400, headers:CORS }); }
-
-  if (!body?.name?.trim()) {
-    log("ERROR","Missing name");
-    return new Response(JSON.stringify({ error:"name" }), { status:400, headers:CORS });
-  }
-  const title = body.name.trim();
-  log("INFO", "Name OK:", title);
-
-  // 2-C  DB call  -----------------------------------------------------------
-  // Call your SECURITY DEFINER RPC (preferred)
-  const { data:rows, error:rpcErr } = await sb.rpc(
-    "create_new_quest_with_participant",
-    { p_title:title, p_type:"agent", p_realm:"oracle_hub", p_creator_id:user.id },
-  );
-
-  if (rpcErr) {
-    const e = rpcErr as PostgrestError;
-    log("ERROR","RPC failed", e);          //  ❗ shows code / message in logs
-    return new Response(JSON.stringify({ error:"rpc", ...e }), { status:500, headers:CORS });
-  }
-  if (!rows?.length) {
-    log("ERROR","RPC returned 0 rows");
-    return new Response(JSON.stringify({ error:"empty" }), { status:500, headers:CORS });
-  }
-
-  const q = rows[0];
-  const payload = {
-    id: q.id,
-    name: q.title,
-    type: q.type,
-    timestamp: q.created_at,
-    lastMessagePreview: "",
-    unreadCount: 0,
-    agentId: q.agent_id ?? null,
-    realm: q.realm,
-    isPinned: false,
-  };
-  log("INFO","Quest created", payload.id);
-  return new Response(JSON.stringify(payload), { status:201, headers:CORS });
 });

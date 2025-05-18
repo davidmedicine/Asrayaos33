@@ -84,7 +84,7 @@ const buildFlameStatusQueryOpts = (uid: string) => ({
 /* -------------------------------------------------------------------------- */
 export const useUnifiedChatPanelData = ({
   initialQuestSlugToSelect,
-  panelId,
+  panelId, // panelId is a prop, assumed stable if not changed by parent
 }: {
   initialQuestSlugToSelect?: string | null;
   panelId: string;
@@ -103,10 +103,14 @@ export const useUnifiedChatPanelData = ({
 
   const [searchInput, setSearchInput] = useState('');
   const deferredQuery = useDeferredValue(searchInput.trim().toLowerCase());
-  const [isPendingSearch, startTransition] = useTransition();
+  const [_isPendingSearch, startTransition] = useTransition(); // Renamed to avoid conflict if isPendingSearch is returned
 
   const hasDoneInitialAutoSelect = useRef(false);
   const heroButtonFlipStateRef = useRef<FlipState | null>(null);
+
+  // Ref to store previous raw listQ.data and sorted quests for stable memoization
+  const prevListQDataForQuestsMemoRef = useRef<{ rawData: Quest[] | undefined, sortedQuests: Quest[] }>({ rawData: undefined, sortedQuests: [] });
+
 
   /* --------------------------- Queries -------------------------------- */
   const listQ = useQuery({
@@ -137,6 +141,20 @@ export const useUnifiedChatPanelData = ({
     enabled: false,
   });
 
+  /* ---------------- Derived Data (Stable Quests) --------------------- */
+  const quests = useMemo(() => {
+    const currentRawData = listQ.data;
+    const { rawData: prevRawData, sortedQuests: prevSortedQuests } = prevListQDataForQuestsMemoRef.current;
+
+    if (prevRawData && currentRawData && shallow(prevRawData, currentRawData)) {
+      return prevSortedQuests;
+    }
+
+    const newSortedQuests = (currentRawData ?? []).sort(sortQuests);
+    prevListQDataForQuestsMemoRef.current = { rawData: currentRawData, sortedQuests: newSortedQuests };
+    return newSortedQuests;
+  }, [listQ.data]);
+
   /* --------------------------- Actions --------------------------------- */
   const maybeRedirectToRitualDayOne = useCallback(async () => {
     if (!userId) return;
@@ -153,7 +171,7 @@ export const useUnifiedChatPanelData = ({
         selectQuest(null);
         return;
       }
-      const quest = listQ.data?.find((q) => q.id === id);
+      const quest = quests?.find((q) => q.id === id); // Use stable `quests`
       if (!quest) return;
 
       startTransition(() => {
@@ -162,12 +180,20 @@ export const useUnifiedChatPanelData = ({
         if (quest.isFirstFlameRitual) void maybeRedirectToRitualDayOne();
       });
     },
-    [listQ.data, maybeRedirectToRitualDayOne, selectQuest]
+    [quests, maybeRedirectToRitualDayOne, selectQuest, startTransition] // Added startTransition
   );
 
   const handleRetryLoad = useCallback(() => {
     qc.invalidateQueries({ queryKey: keyListQuests(userId) });
   }, [qc, userId]);
+
+  const handleSearchChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setSearchInput(e.target.value);
+    },
+    [setSearchInput] // setSearchInput from useState is stable
+  );
+
 
   /* ---------------- Phase Handling ----------------------------------- */
   useEffect(() => {
@@ -180,38 +206,44 @@ export const useUnifiedChatPanelData = ({
       setUiPhase(UIPanelPhase.ERROR);
       return;
     }
-    if (!listQ.data) return;
+    if (!listQ.data) { // Still check listQ.data directly for undefined-ness vs empty array distinction
+        // This case implies data is not yet loaded or truly absent, distinct from an empty list
+        // If uiPhase shouldn't change here, or should be INTRO, adjust accordingly.
+        // For now, matching original behavior of early return.
+        return;
+    }
     setUiPhase(listQ.data.length > 0 ? UIPanelPhase.NORMAL : UIPanelPhase.ONBOARDING);
-  }, [listQ.isPending, listQ.isError, listQ.data, listQ.error, isLoadingAuth]);
+  }, [listQ.isPending, listQ.isError, listQ.data, listQ.error, isLoadingAuth, setUiPhase, setErrorDisplay]);
+
 
   useEffect(() => {
     if (
       hasDoneInitialAutoSelect.current ||
-      listQ.isPending ||
-      !listQ.data?.length
+      listQ.isPending || // Still depends on query's pending state
+      !quests?.length    // Use stable, sorted quests
     ) {
       return;
     }
 
-    const sorted = [...listQ.data].sort(sortQuests);
+    // `quests` is already sorted
     const explicit = initialQuestSlugToSelect
-      ? sorted.find((q) => q.slug === initialQuestSlugToSelect)
+      ? quests.find((q) => q.slug === initialQuestSlugToSelect)
       : undefined;
-    const target = explicit || sorted.find((q) => q.isFirstFlameRitual) || sorted[0];
+    const target = explicit || quests.find((q) => q.isFirstFlameRitual) || quests[0];
 
     if (target) selectQuestSafely(target.id);
     hasDoneInitialAutoSelect.current = true;
 
+    // This prefetch logic seems independent of quest selection itself
     if (!qc.getQueryState(keyFlameStatus(userId))) {
       void qc.prefetchQuery(buildFlameStatusQueryOpts(userId ?? 'anon'));
     }
-  }, [initialQuestSlugToSelect, listQ.isPending, listQ.data, qc, userId, selectQuestSafely]);
+  }, [initialQuestSlugToSelect, listQ.isPending, quests, qc, userId, selectQuestSafely]);
 
-  /* ---------------- Derived Data ------------------------------------- */
-  const quests = useMemo(() => (listQ.data ?? []).sort(sortQuests), [listQ.data]);
 
+  /* ---------------- Derived Data (Filters, etc.) --------------------- */
   const filteredQuests = useMemo(() => {
-    if (!deferredQuery) return quests;
+    if (!deferredQuery) return quests; // `quests` is stable
     return quests.filter((q) => q.name.toLowerCase().includes(deferredQuery));
   }, [quests, deferredQuery]);
 
@@ -220,15 +252,18 @@ export const useUnifiedChatPanelData = ({
     [filteredQuests]
   );
 
+  const isPendingSearch = listQ.isFetching && searchInput.trim() !== deferredQuery;
+
+
   return {
     uiPhase,
     errorDisplay,
     searchQuery: searchInput,
-    isPendingSearch,
+    isPendingSearch, // Use the locally computed one or the one from useTransition if preferred
 
-    quests,
+    quests, // Now stable reference if content is same
     listItemData: filteredQuests,
-    firstFlameQuest: quests.find((q) => q.isFirstFlameRitual),
+    firstFlameQuest: quests.find((q) => q.isFirstFlameRitual), // Uses stable quests
     activeQuestId,
 
     isLoadingAuth,
@@ -238,8 +273,8 @@ export const useUnifiedChatPanelData = ({
     shouldVirtualize,
     heroButtonFlipStateRef,
 
-    handleSearchChange: (e: React.ChangeEvent<HTMLInputElement>) => setSearchInput(e.target.value),
-    handleSelectQuest: selectQuestSafely,
-    handleRetryLoad,
+    handleSearchChange, // Now a stable useCallback
+    handleSelectQuest: selectQuestSafely, // Now more stable due to stable `quests`
+    handleRetryLoad, // Stable useCallback
   };
 };
