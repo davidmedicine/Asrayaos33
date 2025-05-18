@@ -4,6 +4,11 @@
 
 export type RitualDayNumber = 1 | 2 | 3 | 4 | 5;
 
+/** Storage folder prefix for ritual day-definition JSON files */
+export const DAYDEF_PREFIX = '5-day/' as const;
+/** Public Supabase bucket containing the day-definition files */
+export const DAYDEF_BUCKET = 'asrayaospublicbucket' as const;
+
 /* stages – individual exports for tree-shaking */
 export const STAGE_SPARK     = 'spark'     as const;
 export const STAGE_SYMBOL    = 'symbol'    as const;

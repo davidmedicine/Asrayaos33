@@ -8,10 +8,10 @@ import type {
   RitualDayNumber,
   FlameDayDefinition,
 } from './FirstFlame.ts';
+import { DAYDEF_PREFIX } from './ritual.constants.ts';
 
 /*────────────────────────  Config  ────────────────────────*/
-const MAX_CACHE_ENTRIES = 7;      // 5 ritual days + 2 spare
-const DAYDEF_PREFIX     = './5-day/';   // 👈 NEW – sub-folder for day defs
+const MAX_CACHE_ENTRIES = 7; // 5 ritual days + 2 spare
 
 /*───────────────────────  State  ──────────────────────────*/
 const dataCache   = new Map<RitualDayNumber, Readonly<FlameDayDefinition>>();
