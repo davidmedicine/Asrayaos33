@@ -10,7 +10,8 @@ import type {
 } from './FirstFlame.ts';
 
 /*────────────────────────  Config  ────────────────────────*/
-const MAX_CACHE_ENTRIES = 7; // 5 ritual days + 2 spare
+const MAX_CACHE_ENTRIES = 7;      // 5 ritual days + 2 spare
+const DAYDEF_PREFIX     = './5-day/';   // 👈 NEW – sub-folder for day defs
 
 /*───────────────────────  State  ──────────────────────────*/
 const dataCache   = new Map<RitualDayNumber, Readonly<FlameDayDefinition>>();
@@ -60,7 +61,7 @@ async function fetchAndValidate(
   day: RitualDayNumber,
 ): Promise<Readonly<FlameDayDefinition>> {
   /* Build an absolute URL that works locally & on Deno Deploy */
-  const jsonUrl = new URL(`./day-${day}.json`, import.meta.url).href;
+  const jsonUrl = new URL(`${DAYDEF_PREFIX}day-${day}.json`, import.meta.url).href;
 
   /* Deno 1.42+ JSON import with runtime type-safety */
   const mod = await import(jsonUrl, { assert: { type: 'json' } });

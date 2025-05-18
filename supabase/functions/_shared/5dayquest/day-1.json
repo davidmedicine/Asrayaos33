@@ -20,6 +20,10 @@
     "oraclePromptPreview": "Describe a truth you have never spoken aloud, even to yourself."
   },
 
+  "prompts": [
+    "Describe a truth you have never spoken aloud, even to yourself."
+  ],
+
   "reflectionJourney": [
     {
       "id": "ff_d1_m1_locate",
