@@ -1,82 +1,64 @@
-You are joining Asraya OS, an AI-powered creative operating system that lets visionary users collaborate with seven default AI agents (Oracle, Muse, Navigator, Editor, Seeker, Chrono, Witness).
-The product blends chat, quests, a 3-panel dashboard, and a 3-D “inner-verse” world.
+Debug-Mission Prompt for Your Local AI Engineer
+Context
 
-Core Stack (2025-05-17)
+“First Flame” Day-1 JSON never shows up in the browser → no network get-flame-status hit, nothing in Supabase logs.
 
-Frontend – Next.js 15.2.2 (App Router) | React 19 | Tailwind CSS v4 (@theme tokens, OKLCH) | Zustand slices | Framer Motion & GSAP Premium | React-Three-Fiber (for 3-D orbs & worlds).
+list-quests edge function does run (quest list loads).
 
-Backend / Realtime – Supabase (edge functions, Realtime Broadcast + Presence, Auth) | Drizzle ORM | Postgres schema with RLS.
+React console is spamming “Maximum update depth exceeded” from useUnifiedChatPanelData (line 184).
 
-Agent Orchestration – LangGraph + Vercel AI SDK (streaming thinking traces, A2A protocol).
+See the code blocks below – pay special attention to constants and path building.
 
-Workers / AI horsepower – Modal.com containers (Python) for long-running, GPU-heavy, or service-role tasks.
+Primary Suspicion
 
-Edge compute – Mixed: Supabase Edge Functions and Vercel Edge Functions when lower-latency or public CORS is required.
+Constant drift and missing prefix:
 
-Design Language – “Asraya Aethelstone Codex” → mystical-meets-minimal, dark + light schemes, theme-per-agent.
+update_flame_status.py → _load_daydef() downloads day-1.json (no prefix) but the JSON lives under 5-day/day-1.json.
 
-Current Milestone (‘First Flame’ Ritual Quest)
+Two different First-Flame slugs: 'first_flame' vs 'first-flame-ritual'.
 
-Quest engine = 5-day guided ritual (“First Flame”).
+If _load_daydef() 404s, the Modal worker never raises, Supabase edge returns processing: true, the browser keeps polling, and the React hook loops → setState storm.
 
-Day-definition JSONs live in Supabase Storage bucket asrayaospublicbucket/5-day/ → day-1.json … day-5.json.
+🎯 What You Need to Deliver
+Root-cause analysis
 
-Key runtimes
+Trace the call chain: UnifiedChatListPanel → bootstrapFirstFlame() → get-flame-status edge fn (stale path) → realtime broadcast 'missing' → ??? Modal invocation.
 
-supabase/functions/get-flame-status/ (TS) – idempotently seeds quest rows & tells client which ritual day is next.
+Verify that the Modal worker actually runs and that _load_daydef() succeeds. Add temporary logs if needed.
 
-modal_app/update_flame_status.py – Modal worker that loads Day-N JSON, validates, updates DB, then broadcasts flame_status:ready.
+Code fixes (as Git-ready diffs)
 
-_shared/5dayquest/flame-data-loader.ts – client-side LRU loader that JSON-imports & Zod-validates day files.
+Introduce a single-source constant DAYDEF_PREFIX = '5-day/' in update_flame_status.py and use it in _load_daydef().
 
-Recent Constant Change
+Harmonize FIRST_FLAME_SLUG across Python, TS shared constants, and DB rows (first_flame ⇄ first-flame-ritual).
 
-ts
-Copy
-Edit
-// shared constants across all runtimes
-const DAYDEF_PREFIX = '5-day/';           // TS (edge/runtime)
-DAYDEF_PREFIX : Final[str] = '5-day/'     # Python (Modal worker)
-All loaders should build paths as ${DAYDEF_PREFIX}day-${day}.json.
+Ensure get-flame-status builds paths with DAYDEF_PREFIX (already correct).
 
-File/Module Highlights
+React infinite render fix
 
-globals.css – tokenized Tailwind, agent themes, container-query utilities.
+Inspect useUnifiedChatPanelData effect at L 184 – likely missing a dependency array or updating state on every render.
 
-src/components/sidebar/OracleSphere.tsx – 3-D orb in collapsed sidebar.
+Provide a minimal patch that memoizes the callback or guards the setState call.
 
-src/features/hub/components/... – Unified Chat + Quest 3-panel UI with TanStack Query + Zustand.
+Regression safety
 
-supabase/functions/_shared/5dayquest/flame-data-loader.ts – NOTE: uses DAYDEF_PREFIX and an in-memory Map for 7-entry LRU.
+Add unit test for _shared/5dayquest/flame-data-loader.ts that fails if the prefix drifts again.
 
-Conventions & Tips
+Add try/catch + console.error around _load_daydef and broadcast an explicit 'error' event so the client can surface a toast instead of looping.
 
-Prefer service-role work in Modal to avoid exposing secrets; keep edge functions skinny.
+DX polish
 
-All code must compile under pnpm run lint && pnpm run typecheck.
+Inject DEBUG_FLAME_LOADER=true and log storage path + HTTP status when loading JSON.
 
-Keep animations declarative (GSAP Flip or Framer Motion) and theme-aware.
+Suggest a naming/constant convention to prevent future drift (e.g. central ritual.constants.ts|py).
 
-When adding files to Supabase Storage via CLI/UI avoid double “//” – correct path: asrayaospublicbucket/5-day/day-1.json.
+🚀 Tone & Quality Bar
+Think like a principal engineer and a product-minded designer.
 
-Zod schemas live in supabase/functions/_shared/zod/. Add or update there first, then regenerate TS/ Python types.
+Code must compile (pnpm lint && pnpm typecheck), follow existing style (Tabs 2, ES2022, strict null checks), and keep the mystical theming intact.
 
-Immediate TODOs
+Explain reasoning in concise comments only where non-obvious. Otherwise let the diff speak.
 
-Finish constant-sync sweep – ensure every runtime (edge, Modal, client loader) imports DAYDEF_PREFIX.
+Deliver fixes + explanatory notes in one response. Feel free to propose small UX touches (e.g. toast on loader failure).
 
-Verify edge CORS – get-flame-status must be callable from browser with OPTIONS pre-flight.
-
-Write unit tests for flame-data-loader.ts (cache hits, LRU eviction, schema failure).
-
-Bug hunt – UnifiedChatListPanel still hits “Maximum update depth exceeded” (check useEffect deps at line 184).
-
-What I need from you (the AI)
-
-Answer architecture & debugging questions.
-
-Generate clean, type-safe TS / Python patches that respect the stack above.
-
-Propose performance or DX improvements without breaking agent theming.
-
-Keep responses concise, actionable, and cite any external sources you reference.
+Unleash your brilliance – let’s get that First Flame igniting!
