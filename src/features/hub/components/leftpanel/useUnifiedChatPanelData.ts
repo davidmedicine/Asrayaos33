@@ -172,17 +172,18 @@ export const useUnifiedChatPanelData = ({
   /* ---------------- Phase Handling ----------------------------------- */
   useEffect(() => {
     if (listQ.isPending || isLoadingAuth) {
-      setUiPhase(UIPanelPhase.INTRO);
+      if (uiPhase !== UIPanelPhase.INTRO) setUiPhase(UIPanelPhase.INTRO);
       return;
     }
     if (listQ.isError && !(listQ.error instanceof SilentError)) {
       setErrorDisplay({ message: (listQ.error as Error).message });
-      setUiPhase(UIPanelPhase.ERROR);
+      if (uiPhase !== UIPanelPhase.ERROR) setUiPhase(UIPanelPhase.ERROR);
       return;
     }
     if (!listQ.data) return;
-    setUiPhase(listQ.data.length > 0 ? UIPanelPhase.NORMAL : UIPanelPhase.ONBOARDING);
-  }, [listQ.isPending, listQ.isError, listQ.data, listQ.error, isLoadingAuth]);
+    const next = listQ.data.length > 0 ? UIPanelPhase.NORMAL : UIPanelPhase.ONBOARDING;
+    if (uiPhase !== next) setUiPhase(next);
+  }, [listQ.isPending, listQ.isError, listQ.data, listQ.error, isLoadingAuth, uiPhase]);
 
   useEffect(() => {
     if (

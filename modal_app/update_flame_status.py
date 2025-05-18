@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json, logging, os, time
 from typing import Any, Final
+from .constants import DAYDEF_BUCKET, DAYDEF_PREFIX, FIRST_FLAME_SLUG
 
 import modal
 from supabase import create_client
@@ -10,8 +11,6 @@ from supabase.client import Client                            # type-hints only
 from postgrest.exceptions import APIError                     # ← catch Rpc errors
 
 # ─────── constants ───────
-DAYDEF_BUCKET:     Final[str] = "asrayaospublicbucket"
-FIRST_FLAME_SLUG:  Final[str] = "first_flame"
 BROADCAST_CHANNEL: Final[str] = "flame_status"
 RITUAL_SCHEMA:     Final[str] = "ritual"
 # ─────────────────────────
@@ -49,20 +48,20 @@ def _ensure_quest(ritual: Client) -> str:
 
 def _load_daydef(sb: Client, *, day: int = 1) -> Any:
     """Download `day-<n>.json` from Storage and sanity-check it."""
-    blob = sb.storage.from_(DAYDEF_BUCKET).download(f"day-{day}.json")
+    blob = sb.storage.from_(DAYDEF_BUCKET).download(f"{DAYDEF_PREFIX}day-{day}.json")
     data = json.loads(blob.decode())
     if not data.get("prompts"):
         raise ValueError("Day-definition JSON missing ‘prompts’ array")
     return data
 
 
-def _broadcast_ready(sb: Client, user_id: str) -> None:
-    """Emit realtime event so the browser refetches."""
+def _broadcast_event(sb: Client, user_id: str, event: str) -> None:
+    """Emit realtime event so the browser can react."""
     sb.postgrest.rpc(
         "broadcast",
         {
             "channel": BROADCAST_CHANNEL,
-            "event":   "ready",
+            "event":   event,
             "payload": {"user_id": user_id},
         },
     ).execute()
@@ -107,8 +106,14 @@ def update_flame_status(user_id: str) -> None:
 
     logging.info("🆔  imprint_id = %s", imprint_id)
 
-    _load_daydef(sb, day=1)
-    _broadcast_ready(sb, user_id)
+    try:
+        _load_daydef(sb, day=1)
+    except Exception as exc:
+        logging.exception("failed to load day-def")
+        _broadcast_event(sb, user_id, "error")
+        return
+
+    _broadcast_event(sb, user_id, "ready")
 
     logging.info("✅  Finished in %.2fs", time.time() - t0)
 
