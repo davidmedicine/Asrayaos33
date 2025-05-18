@@ -8,10 +8,10 @@ import type {
   RitualDayNumber,
   FlameDayDefinition,
 } from './FirstFlame.ts';
+import { DAYDEF_PREFIX } from './ritual.constants.ts';
 
 /*────────────────────────  Config  ────────────────────────*/
-const MAX_CACHE_ENTRIES = 7;      // 5 ritual days + 2 spare
-const DAYDEF_PREFIX     = './5-day/';   // 👈 NEW – sub-folder for day defs
+const MAX_CACHE_ENTRIES = 7; // 5 ritual days + 2 spare
 
 /*───────────────────────  State  ──────────────────────────*/
 const dataCache   = new Map<RitualDayNumber, Readonly<FlameDayDefinition>>();
@@ -60,12 +60,13 @@ function touch(day: RitualDayNumber, def?: Readonly<FlameDayDefinition>) {
 async function fetchAndValidate(
   day: RitualDayNumber,
 ): Promise<Readonly<FlameDayDefinition>> {
-  /* Build an absolute URL that works locally & on Deno Deploy */
   const jsonUrl = new URL(`${DAYDEF_PREFIX}day-${day}.json`, import.meta.url).href;
 
-  /* Deno 1.42+ JSON import with runtime type-safety */
-  const mod = await import(jsonUrl, { assert: { type: 'json' } });
-  const validated = FlameDayDefinitionZ.parse(mod.default) as Readonly<FlameDayDefinition>;
+  const res = await fetch(jsonUrl);
+  log('INFO', `fetch ${res.url} → ${res.status}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const validated = FlameDayDefinitionZ.parse(await res.json()) as Readonly<FlameDayDefinition>;
 
   log('INFO', `loaded & validated ritual Day ${day}`);
   return validated;

@@ -1,6 +1,7 @@
 // deno-lint-ignore-file
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { DAYDEF_BUCKET, DAYDEF_PREFIX } from '../_shared/5dayquest/ritual.constants.ts';
 
 /* ──────────────── ENV ──────────────── */
 const SB_URL  = Deno.env.get('SUPABASE_URL')!;
@@ -8,10 +9,8 @@ const SB_ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SB_SVC  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 /* ─────────────── CONFIG ────────────── */
-const STALE_MS       = 60_000;                   // 1-min freshness window
-const DAYDEF_BUCKET  = 'asrayaospublicbucket';   // ← matches Modal worker
-const DAYDEF_PREFIX  = '5-day/';                 // ← NEW (keep in sync!)
-const DAY_1_PATH     = `${DAYDEF_PREFIX}day-1.json`;
+const STALE_MS = 60_000; // 1-min freshness window
+const DAY_1_PATH = `${DAYDEF_PREFIX}day-1.json`;
 
 /* ─────────────── CORS ──────────────── */
 const cors = {

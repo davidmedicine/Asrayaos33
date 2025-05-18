@@ -23,7 +23,7 @@ from supabase import create_client
 from supabase.client import Client  # type hints only
 
 # ───────────────────────── CONFIG ──────────────────────────
-FIRST_FLAME_SLUG = "first_flame"
+from modal_app.constants import FIRST_FLAME_SLUG
 # ────────────────────────────────────────────────────────────
 
 # Build an image once; supabase-py is the only heavyweight dep
