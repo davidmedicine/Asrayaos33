@@ -1,64 +1,127 @@
-Debug-Mission Prompt for Your Local AI Engineer
-Context
+# 🔥 First-Flame Debug Mission (v3) — Full-Context
 
-“First Flame” Day-1 JSON never shows up in the browser → no network get-flame-status hit, nothing in Supabase logs.
+## What’s still broken
+1. **React warning**  
+   *Max update depth exceeded* still fires from  
+   `src/features/hub/components/leftpanel/useUnifiedChatPanelData.ts`  
+   (second `useEffect`, currently ~L215 in the latest commit).
 
-list-quests edge function does run (quest list loads).
+2. **No network traffic**  
+   The browser never calls **/functions/get-flame-status** → nothing hits Supabase logs.
 
-React console is spamming “Maximum update depth exceeded” from useUnifiedChatPanelData (line 184).
+3. UX: the user gets an infinite spinner instead of a toast when Day-1 JSON fails.
 
-See the code blocks below – pay special attention to constants and path building.
+---
 
-Primary Suspicion
+## Repository context  
+/src/features/hub/components/leftpanel
+├── HeroIntroScreen.tsx ← begins ritual
+├── UnifiedChatListPanel.tsx ← orchestrator
+├── useUnifiedChatPanelData.ts ← data + state (bug lives here)
+├── QuestListView.tsx / QuestListItem.tsx / QuestRow.tsx
+└── unifiedChatListPanelConstants.ts ← FIRST_FLAME_RITUAL_SLUG, etc.
 
-Constant drift and missing prefix:
+yaml
+Copy
+Edit
 
-update_flame_status.py → _load_daydef() downloads day-1.json (no prefix) but the JSON lives under 5-day/day-1.json.
+Edge function:  
+`supabase/functions/get-flame-status/index.ts`
 
-Two different First-Flame slugs: 'first_flame' vs 'first-flame-ritual'.
+Modal worker (storage loader):  
+`modal_app/update_flame_status.py`
 
-If _load_daydef() 404s, the Modal worker never raises, Supabase edge returns processing: true, the browser keeps polling, and the React hook loops → setState storm.
+Constants are now single-sourced and correct:  
+`FIRST_FLAME_SLUG = 'first-flame-ritual'` and `DAYDEF_PREFIX = '5-day/'`.
 
-🎯 What You Need to Deliver
-Root-cause analysis
+---
 
-Trace the call chain: UnifiedChatListPanel → bootstrapFirstFlame() → get-flame-status edge fn (stale path) → realtime broadcast 'missing' → ??? Modal invocation.
+## Deliverables
+### 1  Stop the React render loop
+**File:** `useUnifiedChatPanelData.ts`
 
-Verify that the Modal worker actually runs and that _load_daydef() succeeds. Add temporary logs if needed.
+* Replace the effect that does  
+  `setUiPhase(listQ.data.length …)` (≈ L215) with a **memoised+guarded** version:
 
-Code fixes (as Git-ready diffs)
+```ts
+const nextPhase = useMemo(() => {
+  if (listQ.isPending || isLoadingAuth) return UIPanelPhase.INTRO;
+  if (listQ.isError && !(listQ.error instanceof SilentError))
+    return UIPanelPhase.ERROR;
+  if (!listQ.data) return uiPhase;        // <- no change
+  return listQ.data.length ? UIPanelPhase.NORMAL : UIPanelPhase.ONBOARDING;
+}, [
+  listQ.isPending, listQ.isError, listQ.data,
+  isLoadingAuth, uiPhase,
+]);
 
-Introduce a single-source constant DAYDEF_PREFIX = '5-day/' in update_flame_status.py and use it in _load_daydef().
+useEffect(() => {
+  if (nextPhase !== uiPhase) setUiPhase(nextPhase);
+}, [nextPhase, uiPhase]);
+Add a Jest test (useUnifiedChatPanelData.test.ts) that mounts the hook with
+@testing-library/react-hooks, renders two times, and asserts no console.error.
 
-Harmonize FIRST_FLAME_SLUG across Python, TS shared constants, and DB rows (first_flame ⇄ first-flame-ritual).
+2 Wire bootstrapFirstFlame() → Temporal → Edge Function
+Files & tasks
 
-Ensure get-flame-status builds paths with DAYDEF_PREFIX (already correct).
+Location	Change
+useUnifiedChatPanelData.ts	Add a bootstrapFirstFlame callback that:
+⚙️ invokes the Temporal Workflow seedFirstFlame (activity proxies already exist)
+⚙️ then calls supabase.functions.invoke('get-flame-status') and updates React-Query cache (qc.setQueryData)
+Return it from the hook and prop-drill as shown below.	
+UnifiedChatListPanel.tsx	Already receives bootstrapFirstFlame – good.
+HeroIntroScreen.tsx	Prop name mismatch: change onBeginFirstFlame → onSelectFirstFlame (or update caller) so click handler compiles.
 
-React infinite render fix
+Acceptance: In DevTools → Network, a GET to …/functions/v1/get-flame-status appears and returns 200 (or 202 processing).
 
-Inspect useUnifiedChatPanelData effect at L 184 – likely missing a dependency array or updating state on every render.
+3 Graceful error broadcast + UI toast
+modal_app/update_flame_status.py already broadcasts event="error".
 
-Provide a minimal patch that memoizes the callback or guards the setState call.
+In the client, subscribe once to flame_status:error (Zustand slice or React effect) and show toast.error('First-Flame loader failed') instead of spinning forever.
 
-Regression safety
+4 CORS & logging hardening
+In get-flame-status/index.ts add:
 
-Add unit test for _shared/5dayquest/flame-data-loader.ts that fails if the prefix drifts again.
+ts
+Copy
+Edit
+console.log('[EF] get-flame-status', { user: user?.id ?? 'anon', fresh: isFresh });
+Keep the existing CORS headers; test with:
 
-Add try/catch + console.error around _load_daydef and broadcast an explicit 'error' event so the client can surface a toast instead of looping.
+bash
+Copy
+Edit
+curl -i -X OPTIONS \
+  -H "Origin: http://localhost:3000" \
+  "https://<project>.functions.supabase.co/get-flame-status"
+Expect 200 + the Access-Control-* headers.
 
-DX polish
+5 Regression Tests
+Unit test supabase/functions/_shared/5dayquest/flame-data-loader.ts
+await expect(loadValidateAndCacheDayDef(1)).resolves.toHaveProperty('ritualDay', 1);
 
-Inject DEBUG_FLAME_LOADER=true and log storage path + HTTP status when loading JSON.
+Add this to the Vercel CI job so constant drift breaks the build.
 
-Suggest a naming/constant convention to prevent future drift (e.g. central ritual.constants.ts|py).
+6 DX / Git hygiene
+Daily: git pull --rebase origin main
 
-🚀 Tone & Quality Bar
-Think like a principal engineer and a product-minded designer.
+Feature: git switch -c fix/first-flame-v3
 
-Code must compile (pnpm lint && pnpm typecheck), follow existing style (Tabs 2, ES2022, strict null checks), and keep the mystical theming intact.
+Local checks: pnpm lint && pnpm test && pnpm typecheck
 
-Explain reasoning in concise comments only where non-obvious. Otherwise let the diff speak.
+git push -u origin HEAD → open PR “fix: React loop + flame bootstrap”
 
-Deliver fixes + explanatory notes in one response. Feel free to propose small UX touches (e.g. toast on loader failure).
+Merge only when Vercel + Jest are green.
 
-Unleash your brilliance – let’s get that First Flame igniting!
+Acceptance checklist
+ No “update depth exceeded” in console.
+
+ get-flame-status shows in Network panel and Supabase logs.
+
+ On loader failure, user sees a toast—not an infinite spinner.
+
+ pnpm test and pnpm typecheck pass.
+
+ CI green; PR merged into main.
+
+Let’s ignite that First Flame—no more infinite loops or invisible requests!
