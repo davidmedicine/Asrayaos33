@@ -51,6 +51,7 @@ export interface QuestSliceState {
   firstQuestJustCreated: boolean;
   isLoadingQuests: boolean;
   errorLoadingQuests: string | null;
+  lastSynced: number | null;
 }
 
 export interface QuestSliceActions {
@@ -72,6 +73,7 @@ export interface QuestSliceActions {
   setFirstQuestJustCreated: (value: boolean) => void;
   setIsLoadingQuests: (isLoading: boolean) => void;
   setErrorLoadingQuests: (error: string | null) => void;
+  setLastSynced: (ts: number) => void;
   resetQuestSlice: () => void;
   _migrateFirstQuestFlag: () => void; // Internal action for migration
 }
@@ -141,6 +143,7 @@ const INITIAL_QUEST_SLICE_STATE: QuestSliceState = {
   firstQuestJustCreated: false, // Will be properly set by _migrateFirstQuestFlag then loadFirstQuestFlag
   isLoadingQuests: true,
   errorLoadingQuests: null,
+  lastSynced: null,
 };
 
 /* ---------------------------------------------------------------------------
@@ -337,11 +340,18 @@ export const createQuestSlice: StateCreator<
         error ? 'quest/list:loadingError' : 'quest/list:loadingErrorClear'
       ),
 
+    setLastSynced: (ts) =>
+      set({ lastSynced: ts }, false, `quest/setLastSynced:${ts}`),
+
     resetQuestSlice: () => {
       // `_migrateFirstQuestFlag` should be called on app init.
       // `loadFirstQuestFlag` will then get the correct (possibly migrated) value.
       const currentFirstQuestFlag = loadFirstQuestFlag();
-      set({...INITIAL_QUEST_SLICE_STATE, firstQuestJustCreated: currentFirstQuestFlag }, true, 'quest/resetQuestSlice');
+      set({
+        ...INITIAL_QUEST_SLICE_STATE,
+        firstQuestJustCreated: currentFirstQuestFlag,
+        lastSynced: null,
+      }, true, 'quest/resetQuestSlice');
     }
   }),
   { name: 'QuestSlice', store: 'quest', enabled: process.env.NODE_ENV !== 'production' }
@@ -357,6 +367,7 @@ export const selectActiveQuest = (state: StoreState): Quest | null => {
 export const selectAllQuests = (state: StoreState): Quest[] => state.questSlice.quests;
 export const selectIsLoadingQuests = (state: StoreState): boolean => state.questSlice.isLoadingQuests;
 export const selectFirstQuestJustCreated = (state: StoreState): boolean => state.questSlice.firstQuestJustCreated;
+export const selectQuestLastSynced = (state: StoreState): number | null => state.questSlice.lastSynced;
 
 /* ---------------------------------------------------------------------------
  * 6. End of file
