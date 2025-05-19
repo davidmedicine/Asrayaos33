@@ -165,7 +165,7 @@ function UnifiedChatListPanelImpl({
             firstFlameQuest={firstFlameQuest}
             isInitialLoadComplete={isInitialLoadComplete}
             questsAvailable={quests.length > 0}
-            onBeginFirstFlame={handleSelectFirstFlameFromHero}
+            onSelectFirstFlame={handleSelectFirstFlameFromHero}
             bootstrapFirstFlame={bootstrapFirstFlame}
             onRetryLoad={handleRetryLoad}
             heroButtonRef={heroButtonRef}
