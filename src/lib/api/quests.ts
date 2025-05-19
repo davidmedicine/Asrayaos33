@@ -17,6 +17,9 @@
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js';
 import type { QueryClient, UseQueryOptions } from '@tanstack/react-query';
 import type { Message as VercelMessage } from 'ai/react'; // From original file structure
+import { z } from 'zod';
+
+import { zTimestampISO } from '@/lib/core/FirstFlame.zod';
 
 import { supabase } from '@/lib/supabase_client/client';
 import type {
@@ -32,6 +35,15 @@ import type {
 
 export const FIRST_FLAME_SLUG = 'first-flame-ritual';
 const BG_SYNC_SUBMIT_IMPRINT_TAG_PREFIX = 'submit-flame-imprint-sync:';
+
+/** Edge Function error codes shared across clients. */
+export enum EdgeErrorCode {
+  AUTH = 'AUTH',
+  DB = 'DB',
+  STORAGE = 'STORAGE',
+  METHOD_NOT_ALLOWED = 'METHOD_NOT_ALLOWED',
+  SERVER_ERROR = 'SERVER_ERROR',
+}
 
 /**
  * Custom error class for network issues encountered before a response from Supabase Functions.
@@ -62,6 +74,34 @@ export interface QuestPayloadFromServer {
   communityId?: string | null | undefined;
   isFirstFlameRitual?: boolean; // Added client-side
 }
+
+export interface ListQuestsResponse {
+  data: QuestPayloadFromServer[];
+  serverTimestamp: string;
+  error?: EdgeErrorCode;
+}
+
+export const zQuestPayloadFromServer = z.object({
+  id: z.string(),
+  slug: z.string(),
+  name: z.string(),
+  type: z.string(),
+  timestamp: zTimestampISO,
+  createdAt: zTimestampISO.optional(),
+  lastMessagePreview: z.string(),
+  unreadCount: z.number(),
+  agentId: z.string().nullable().optional(),
+  realm: z.string().nullable().optional(),
+  isPinned: z.boolean(),
+  communityId: z.string().nullable().optional(),
+  isFirstFlameRitual: z.boolean().optional(),
+});
+
+export const zListQuestsResponse = z.object({
+  data: z.array(zQuestPayloadFromServer),
+  serverTimestamp: zTimestampISO,
+  error: z.nativeEnum(EdgeErrorCode).optional(),
+});
 
 /**
  * Represents the successful response from the `submit-flame-imprint` Edge Function.
@@ -207,17 +247,20 @@ async function invoke<TData>(
  * Fetches the list of all quests for the user.
  * @returns A promise resolving to an array of quest payloads.
  */
-export async function fetchQuestList(): Promise<QuestPayloadFromServer[]> {
-  const quests = await invoke<QuestPayloadFromServer[]>('list-quests', {
-    method: 'GET',
-  });
-  if (!quests) {
-    throw new Error('list-quests returned null data when an array was expected.');
-  }
-  return quests.map(q => ({
-    ...q,
-    isFirstFlameRitual: q.slug === FIRST_FLAME_SLUG,
-  }));
+export async function fetchQuestList(): Promise<{
+  quests: QuestPayloadFromServer[];
+  serverTimestamp: string;
+}> {
+  const res = await invoke<ListQuestsResponse>('list-quests', { method: 'GET' });
+  const parsed = zListQuestsResponse.parse(res);
+  if (parsed.error) throw new Error(parsed.error);
+  return {
+    quests: parsed.data.map(q => ({
+      ...q,
+      isFirstFlameRitual: q.slug === FIRST_FLAME_SLUG,
+    })),
+    serverTimestamp: parsed.serverTimestamp,
+  };
 }
 
 /**
@@ -336,6 +379,9 @@ export async function submitImprint(
 /* -------------------------------------------------------------------------- */
 /* 6. React-Query Utilities                                                   */
 /* -------------------------------------------------------------------------- */
+
+/** Query key for fetching quests. */
+export const QUESTS_QUERY_KEY = ['quests'] as const;
 
 /** Query key for fetching flame status. */
 export const FLAME_STATUS_QUERY_KEY = ['flame-status'] as const;
