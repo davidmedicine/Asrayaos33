@@ -1,104 +1,61 @@
-• “Asraya OS” is a myth-driven quest engine: Temporal (durable workflows) ▶ Modal (AI scenes) ▶ Supabase (Edge + RLS Postgres + Realtime) ▶ Next JS front-end.
-• Edge Function list-quests now compiles & returns 200 OK after we switched to withCors() and method:'GET'.
-• Front-end hook useUnifiedChatPanelData() still renders nothing; First-Flame quest never appears.
-• We need the left-panel (Quest list) to populate, auto-select First Flame, and flow to /first-flame/day-1.
-• Stack versions: supabase-js v2.49, React 18, React-Query v5, Zustand, Next 14 (app router).
+Context (do not modify):
+• Next 15 (App Router) · React 19 · Zustand · TanStack Query v5
+• Supabase Edge Functions (list-quests, get-flame-status) now return wrapped payloads:
+{ data: <rows>, serverTimestamp: <ISO> } and { processing | dataVersion | … } respectively.
+• UI error “Failed to Load Quests → Unknown error” appears even though Network tab shows HTTP 200.
+• Root cause: front-end helpers still expect a bare array/object instead of the new wrapper.
 
-Critical clues
+🔧 Primary Objectives
+Fix the contract mismatch between Edge Functions and src/lib/api/quests.ts:
 
-Network tab: list-quests ⇒ 200, body: { data:[…], serverTimestamp:"…" }
+fetchQuestList must unwrap res.data and surface res.error (if present) before returning.
 
-Console: no runtime errors.
+fetchFlameStatus must tolerate { processing: true } → 202 and only set slice data when processing === false.
 
-UI: Unified-Chat panel blank; hero intro stuck on spinner.
+Ensure Day-1 (“first-flame-ritual”) quest auto-boots for a brand-new user and its messages hydrate
+ActiveConversationPanel + ChatContextPanel.
 
-Hook code-path:
+Remove the phantom “Unknown error.”—UI should display the actual error string returned by the function wrapper.
 
-useQuery(select…).map(mapQuest).filter(Boolean) discards any row where row.name, row.slug, or row.id is falsy.
+Keep query keys, stale/GC times, and slice hydration in sync with unifiedChatListPanelConstants.ts.
 
-mapQuest() expects name but our Edge payload currently returns title → mapped to name (OK).
+Preserve optimistic pin/unpin & LRU logic already present in questSlice.
 
-Front-end still calls supabase.functions.invoke('list-quests') without the { method:'GET' } override in one legacy file.
+🛠️ Worklist for the Agent
+#	File / Area	Required Action
+1	src/lib/api/quests.ts	• Replace every invoke<T>('list-quests') call with logic that:
+a) const res = await invoke<{ data: QuestPayloadFromServer[]; serverTimestamp: string }>(...)
+b) If res?.error → throw new Error(res.error)
+c) Return res.data.map(q ⇒ ({ …q, isFirstFlameRitual: q.slug === FIRST_FLAME_SLUG })).
+• In fetchFlameStatus return early with { processing: true } so the slice can show a spinner instead of an error.
+2	src/features/hub/components/leftpanel/useUnifiedChatPanelData.ts	• Update the useQuery(['quests'], fetchQuestList …) success handler to write serverTimestamp → questSlice.lastSynced.
+3	src/lib/state/slices/firstFlameSlice.ts	• Inside ensureBootstrapped() call the new fetchFlameStatus. When it resolves with { processing: false } seed day-1 messages and set hasBootstrapped = true.
+4	src/features/hub/components/ActiveConversationPanel.tsx	• useFlameBroadcast → on 'ready' event invalidate both ['flame-status'] and ['quests'] so the list order updates after day change.
+5	src/features/hub/components/UnifiedChatListPanel.tsx	• Replace hard-coded string “Unknown error.” with errorDisplay?.message ?? 'Unexpected client error.'.
+6	src/lib/api/quests.ts	• Add a narrow overload to invoke() that automatically infers GET when options.method is omitted and no body is provided—this prevents accidental POSTs that the Edge runtime blocks.
+7	Audit	• Grep repo for list-quests and ensure every call site handles the { data, serverTimestamp } wrapper.
+8	Tests	• Add jest / vitest unit for fetchQuestList that stubs the wrapped response and asserts correct array return.
+9	Storybook	• Update the QuestList error story: feed { error: 'DB' } from MSW and confirm UI shows “Database error.” not “Unknown error.”
 
-External references (for the agent’s chain-of-thought)
-• Supabase Edge Functions default to POST unless method:'GET' is specified 
-Supabase
-
-• supabase.functions.invoke signature & CORS caveats 
-TanStack
-
-• React-Query select() & placeholderData behaviour 
-Supabase
-
-• withCors helper pattern for Deno Edge FNs 
-Supabase
-
-• RLS policies can still hide rows even after upsert 
-Supabase
-
-• Deferred value & state-driven blank lists in React 18 
-React
-
-• Supabase troubleshooting 405 vs 200 mismatches 
-Supabase
-
-🛠 Tasks for you (agent)
-Source-grep the entire repo for supabase.functions.invoke('list-quests'
-
-Replace every call with
-
-ts
+🗂️ Directories the Agent MUST Scan
+swift
 Copy
 Edit
-await supabase.functions.invoke('list-quests', { method: 'GET' });
-Confirm payload propagation
+asrayaos8.4/src/features/hub/components/leftpanel
+asrayaos8.4/src/features/hub/components/ActiveConversationPanel.tsx
+asrayaos8.4/src/features/hub/components/ChatContextPanel.tsx
+asrayaos8.4/src/lib/api/quests.ts
+asrayaos8.4/src/lib/state/slices/firstFlameSlice.ts
+asrayaos8.4/src/lib/state/slices/questslice.ts
+asrayaos8.4/supabase/functions/list-quests/*
+asrayaos8.4/supabase/functions/get-flame-status/*
+✅ Definition of Done
+Loading /hub on a fresh profile auto-shows Day-1 quest and messages.
 
-Log the resolved value of listQ.data inside useUnifiedChatPanelData.
+“Failed to Load Quests” panel now surfaces exact backend error codes (AUTH, DB, STORAGE, etc.).
 
-If it’s an empty array, inspect the Edge function’s SELECT + RLS; otherwise trace why quests ends up [].
+Subsequent visits rehydrate quest list within QUEST_QUERY_STALE_TIME (5 min) and never flash the intro spinner unnecessarily.
 
-Verify RLS & participation
+Live flame-status Broadcast updates reorder the quest list in real time without manual refresh.
 
-Check policy quests and policy quest_participants — user must be role participant.
-
-Ensure getOrCreateFirstFlame() upsert really commits; log ff.id and query result.
-
-Unit-test mapQuest()
-
-Feed it a sample row from the live payload; assert it returns non-null.
-
-Guard against missing lastMessagePreview or created_at → return sensible defaults.
-
-Tighten the hook
-
-Add an early console.warn if quests.length === 0 after mapping.
-
-If quests remains empty, set uiPhase to ONBOARDING instead of forever INTRO.
-
-Fix auto-selection
-
-useQuestStore currently exports activeQuestId / setActiveQuestId; confirm these names match the store slice.
-
-Make sure QuestListView receives listItemData once, then selectQuestSafely fires.
-
-Smoke-test the navigation
-
-Manually click First-Flame from header; ensure router pushes /first-flame/day-1.
-
-Check get-flame-status → returns 200 & correctly shaped JSON.
-
-Commit & PR
-
-Add meaningful commit titles: “fix: ensure GET invoke + quest mapping”, “feat: blank-list guard to onboarding”.
-
-Deliver the PR link plus a one-paragraph changelog.
-
-✅ Success criteria
-Quest list renders at least the First-Flame row.
-
-Clicking (or auto-selecting) navigates to Day 1 without console errors. it should load the asrayaos8.4/supabase/functions/_shared/5dayquest/day-1.json -- that is uploaded here in the supabse = https://xdkadojhsteiecbqjgro.supabase.co/storage/v1/object/public/asrayaospublicbucket/5-day/day-1.json 
-when it loads it should activate the asrayaos8.4/src/features/hub/components/ActiveConversationPanel.tsx  and - asrayaos8.4/src/features/hub/components/ChatContextPanel.tsx
-
-Subsequent refresh returns identical state (durable).
-
-No CORS or 405s in network tab.
+All TypeScript types compile with strict: true.
