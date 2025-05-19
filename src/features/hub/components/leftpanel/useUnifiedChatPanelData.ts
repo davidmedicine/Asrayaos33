@@ -177,7 +177,10 @@ export const useUnifiedChatPanelData = ({
       const uid = queryKey[1] as string;
       if (uid === 'anon') throw new SilentError('User is not logged in.'); // Should be caught by `enabled`
       
-      const { data, error } = await supabase.functions.invoke<ListQuestsResponse>('list-quests');
+      const { data, error } = await supabase.functions.invoke<ListQuestsResponse>(
+        'list-quests',
+        { method: 'GET' },
+      );
       if (error) throw error;
       if (!data || !Array.isArray(data.data)) throw new Error('Invalid data payload from list-quests');
       
@@ -185,7 +188,13 @@ export const useUnifiedChatPanelData = ({
     },
     select: (response) => {
       // Map and filter quests from the response data
-      return response.data.map(mapQuest).filter((q): q is Quest => q !== null);
+      const mapped = response.data
+        .map(mapQuest)
+        .filter((q): q is Quest => q !== null);
+      if (mapped.length === 0) {
+        console.warn('[useUnifiedChatPanelData] mapped quest list is empty');
+      }
+      return mapped;
     },
     retry: (failureCount, error) => {
       if (error instanceof SilentError) return false; // Don't retry for silent errors
@@ -215,6 +224,15 @@ export const useUnifiedChatPanelData = ({
     prevListQDataForQuestsMemoRef.current = { rawData: currentRawData, sortedQuests: sorted };
     return sorted;
   }, [listQ.data]); // Dependency is listQ.data which changes when new data is fetched
+
+  useEffect(() => {
+    if (listQ.data) {
+      console.log('[useUnifiedChatPanelData] list-quests data', listQ.data);
+      if (Array.isArray(listQ.data.data) && listQ.data.data.length === 0) {
+        console.warn('[useUnifiedChatPanelData] list-quests returned empty array');
+      }
+    }
+  }, [listQ.data]);
 
   /* ---------------- Phase calculation (memoised) ---------------- */
   const calculatedNextPhase = useMemo(() => {
