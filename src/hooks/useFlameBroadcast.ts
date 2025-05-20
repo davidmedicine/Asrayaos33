@@ -31,7 +31,7 @@ export function useFlameBroadcast(): void {
     const channel = supabase.channel('flame_status');
 
     const handleReady = () => {
-      // Invalidate queries to refetch data
+      // Invalidate queries to force a refetch when the backend signals readiness
       queryClient.invalidateQueries({ queryKey: FLAME_STATUS_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: QUESTS_QUERY_KEY });
 
