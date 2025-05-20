@@ -98,3 +98,33 @@ export async function getOrCreateFirstFlame(
   // console.debug(`[shared/db/firstFlame] Successfully inserted quest for slug '${FIRST_FLAME_SLUG}'. ID: ${newQuest.id}`);
   return newQuest;
 }
+
+/**
+ * getOrCreateFirstFlameProgress
+ * -----------------------------------------------------
+ * Ensure a flame_progress row exists for the given user.
+ * Inserts `current_day_target = 1` if missing. Caller must
+ * provide the quest id (typically from getOrCreateFirstFlame).
+ */
+export async function getOrCreateFirstFlameProgress(
+  admin: SupabaseClient,
+  userId: string,
+  questId: string,
+): Promise<void> {
+  const { error } = await admin
+    .from('flame_progress')
+    .upsert(
+      {
+        quest_id: questId,
+        user_id: userId,
+        current_day_target: 1,
+        is_quest_complete: false,
+      },
+      { onConflict: 'quest_id,user_id', ignoreDuplicates: true },
+    );
+
+  if (error) {
+    console.error('[shared/db/firstFlame] flame_progress upsert error', error);
+    throw error;
+  }
+}

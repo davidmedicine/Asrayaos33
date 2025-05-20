@@ -14,8 +14,11 @@ import {
   captureError,
   flushSentryEvents,
 }                             from '../_shared/sentry.ts'
-import { getOrCreateFirstFlame, type QuestRow as MinQuestRow }
-                             from '../_shared/db/firstFlame.ts'
+import {
+  getOrCreateFirstFlame,
+  getOrCreateFirstFlameProgress,
+  type QuestRow as MinQuestRow,
+}                             from '../_shared/db/firstFlame.ts'
 import { toISO }              from '../_shared/types/index.ts'
 import {
   FIRST_FLAME_SLUG,
@@ -140,6 +143,12 @@ Deno.serve(async (req) => {
       { onConflict: 'quest_id,user_id', ignoreDuplicates: true },
     )
     if (upsertErr) console.error(`[${FN}] quest_participants upsert error`, upsertErr)
+
+    try {
+      await getOrCreateFirstFlameProgress(sbAdmin, user.id, ff.id)
+    } catch (pe) {
+      console.error(`[${FN}] flame_progress upsert error`, pe)
+    }
 
     /*── Fetch quests visible to the caller ───────────────────────*/
     const { data, error: fetchErr } = await sbUser
