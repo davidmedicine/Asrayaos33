@@ -418,13 +418,11 @@ async function decodeStorageObject(data: unknown): Promise<string> {
 
 /**
  * Fetches the list of all quests for the user.
- * @returns A promise resolving to an object containing an array of quest payloads and the server timestamp.
+ * @returns A promise resolving to the full `ListQuestsResponse` containing the
+ * quest payloads and the server timestamp.
  * @throws {Error} if the server response indicates an error or parsing fails.
  */
-export async function fetchQuestList(): Promise<{
-  quests: QuestPayloadFromServer[];
-  serverTimestamp: string;
-}> {
+export async function fetchQuestList(): Promise<ListQuestsResponse> {
   // Invoke with `any` because the response might be a string (if no JSON header) or an already parsed object.
   const rawResponse = await invoke<any>("list-quests", {
     method: "GET",
@@ -473,11 +471,13 @@ export async function fetchQuestList(): Promise<{
     throw new Error(`Error from list-quests: ${responseData.error}`);
   }
 
+  const mappedQuests = responseData.data.map((q) => ({
+    ...q,
+    isFirstFlameRitual: q.slug === FIRST_FLAME_SLUG,
+  }));
+
   return {
-    quests: responseData.data.map((q) => ({
-      ...q,
-      isFirstFlameRitual: q.slug === FIRST_FLAME_SLUG,
-    })),
+    data: mappedQuests,
     serverTimestamp: responseData.serverTimestamp,
   };
 }
