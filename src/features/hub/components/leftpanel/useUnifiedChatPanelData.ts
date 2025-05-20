@@ -16,7 +16,11 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import type { FlipState } from 'gsap/Flip';
 
 import { supabase } from '@/lib/supabase_client/client';
-import { useQuestStore, Quest as BaseQuest } from '@/lib/state/slices/questslice';
+import {
+  useQuestStore,
+  Quest as BaseQuest,
+  useSafeSetActiveQuestId,
+} from '@/lib/state/slices/questslice';
 import { useAuth } from '../AuthContext';
 import {
   FIRST_FLAME_RITUAL_SLUG,
@@ -92,17 +96,13 @@ export const useUnifiedChatPanelData = ({
   initialQuestSlugToSelect?: string | null;
   panelId: string;
 }) => {
-  const noop = () => {}; // Added by diff
 
   const router = useRouter();
   const qc = useQueryClient();
   const { userId, isLoadingAuth, authError } = useAuth();
 
-  // Ensure setActiveQuestId from Zustand store has a default noop if not provided - Changed by diff
-  const { activeQuestId, setActiveQuestId = noop } = useQuestStore(
-    (s) => ({ activeQuestId: s.activeQuestId, setActiveQuestId: s.setActiveQuestId }),
-    shallow,
-  );
+  const activeQuestId = useQuestStore((s) => s.activeQuestId);
+  const setActiveQuestId = useSafeSetActiveQuestId();
 
   /* ---------------- Local state ---------------- */
   const [uiPhase, setUiPhase] = useState<UIPanelPhase>(UIPanelPhase.INTRO);

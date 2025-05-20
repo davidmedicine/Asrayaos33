@@ -413,3 +413,14 @@ export const selectQuestLastSynced = (state: StoreState): number | null =>
 export const useQuestStore = create<QuestSlice>()(
   createQuestSlice as unknown as StateCreator<QuestSlice, [], []>, // Explicitly type if needed, or keep as unknown
 );
+
+export const useSafeSetActiveQuestId = (): QuestSliceActions["setActiveQuestId"] => {
+  const action = useQuestStore((s) => (s as QuestSlice).setActiveQuestId);
+  if (typeof action !== "function") {
+    if (process.env.NODE_ENV === "test") {
+      return () => {};
+    }
+    throw new Error("[questslice] setActiveQuestId action is missing");
+  }
+  return action;
+};
