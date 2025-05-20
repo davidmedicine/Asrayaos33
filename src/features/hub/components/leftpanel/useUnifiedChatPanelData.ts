@@ -152,6 +152,8 @@ export const useUnifiedChatPanelData = ({
     return sorted;
   }, [listQ.data?.quests]);
 
+  const questsArray = quests ?? [];
+
   /* ---------------- Phase calculation (memoised) ---------------- */
   const nextPhase = useMemo(() => { // Variable name `calculatedNextPhase` in diff, `nextPhase` in base. Sticking to `nextPhase` from base for minimal change if logic is same. Diff's logic for phase is identical.
     if (listQ.isPending || isLoadingAuth) return UIPanelPhase.INTRO;
@@ -195,7 +197,7 @@ export const useUnifiedChatPanelData = ({
         setActiveQuestId(null);
         return;
       }
-      const questToSelect = quests.find((q) => q.id === questId); // Renamed `quest` to `questToSelect`
+      const questToSelect = questsArray.find((q) => q.id === questId);
       if (!questToSelect) {
         console.warn(`Quest with id ${questId} not found for selection.`); // Added by diff
         return;
@@ -209,7 +211,7 @@ export const useUnifiedChatPanelData = ({
         }
       });
     },
-    [quests, setActiveQuestId, startTransition, maybeRedirectToRitualDayOne], // Dependencies updated
+    [questsArray, setActiveQuestId, startTransition, maybeRedirectToRitualDayOne],
   );
 
   const handleRetryLoad = useCallback(() => {
@@ -258,23 +260,23 @@ export const useUnifiedChatPanelData = ({
       }
     }
 
-    const flameQuest = quests.find((q) => q.isFirstFlameRitual);
+    const flameQuest = questsArray.find((q) => q.isFirstFlameRitual);
     if (flameQuest && !hasDoneInitialAutoSelect.current) {
       selectQuestSafely(flameQuest.id);
       hasDoneInitialAutoSelect.current = true;
     }
 
     router.replace(AppRoutes.RitualDayOne);
-  }, [bootstrapFirstFlame, userId, qc, quests, selectQuestSafely, router]);
+  }, [bootstrapFirstFlame, userId, qc, questsArray, selectQuestSafely, router]);
 
   /* ------------- Auto‑select & prefetch once data is ready ----------- */
   useEffect(() => {
-    if (hasDoneInitialAutoSelect.current || listQ.isPending || !quests.length || !userId) return; // Added !userId guard from diff
+    if (hasDoneInitialAutoSelect.current || listQ.isPending || !questsArray.length || !userId) return;
 
     const explicit = initialQuestSlugToSelect
-      ? quests.find((q) => q.slug === initialQuestSlugToSelect)
+      ? questsArray.find((q) => q.slug === initialQuestSlugToSelect)
       : undefined;
-    const target = explicit || quests.find((q) => q.isFirstFlameRitual) || quests[0];
+    const target = explicit || questsArray.find((q) => q.isFirstFlameRitual) || questsArray[0];
 
     if (target) selectQuestSafely(target.id);
     hasDoneInitialAutoSelect.current = true;
@@ -283,7 +285,7 @@ export const useUnifiedChatPanelData = ({
     if (!qc.getQueryState(keyFlameStatus(userId ?? 'anon'))) { // userId ?? 'anon' from base, diff has (userId)
       void qc.prefetchQuery(buildFlameStatusQueryOpts(userId ?? 'anon')); // userId ?? 'anon' from base
     }
-  }, [initialQuestSlugToSelect, listQ.isPending, quests, qc, userId, selectQuestSafely]);
+  }, [initialQuestSlugToSelect, listQ.isPending, questsArray, qc, userId, selectQuestSafely]);
 
 
   /* ------------- Error Display Effect for listQ query ----------- */
@@ -311,9 +313,9 @@ export const useUnifiedChatPanelData = ({
   /* ---------------- Filters & selectors ---------------- */
   const filteredQuests = useMemo(() => {
     const query = searchInput.trim().toLowerCase();
-    if (!query) return quests;
-    return quests.filter((q) => q.name.toLowerCase().includes(query));
-  }, [quests, searchInput]);
+    if (!query) return questsArray;
+    return questsArray.filter((q) => q.name.toLowerCase().includes(query));
+  }, [questsArray, searchInput]);
 
   const shouldVirtualize = useMemo(() => filteredQuests.length >= VIRTUALIZATION_THRESHOLD, [filteredQuests.length]); // .length added by diff
   // More accurate isPendingSearch: true if a search is typed but deferred value hasn't updated AND list is fetching
@@ -334,10 +336,10 @@ export const useUnifiedChatPanelData = ({
     searchQuery: searchInput,
     isPendingSearch,
 
-    quests, // All available quests, sorted
+    quests: questsArray, // All available quests, sorted
     listItemData: listItemData as QuestForListItemAugmented[],
 
-    firstFlameQuest: quests.find((q) => q.isFirstFlameRitual),
+    firstFlameQuest: questsArray.find((q) => q.isFirstFlameRitual),
     activeQuestId,
 
     isLoadingAuth,

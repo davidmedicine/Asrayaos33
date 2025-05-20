@@ -153,6 +153,7 @@ import { shallow } from 'zustand/shallow';
     headerFirstFlameButtonRef,
     headerNewQuestButtonRef,
   }) => {
+    const questsArray = quests ?? [];
     const listContainerRef = useRef<HTMLDivElement>(null); // For the listbox container
     const fixedListRef = useRef<FixedSizeList>(null); // For react-window API
 
@@ -163,9 +164,10 @@ import { shallow } from 'zustand/shallow';
     const hasMounted = useRef(false); // To prevent effects on initial mount if not desired
   
     const firstFlameQuest = useMemo(
-      () => quests.find((q) => q.slug === FIRST_FLAME_RITUAL_SLUG),
-      [quests]
+      () => questsArray.find((q) => q.slug === FIRST_FLAME_RITUAL_SLUG),
+      [questsArray]
     );
+    const safeFirstFlameQuest = firstFlameQuest ?? null;
   
     // --- ARIA Active Descendant ID ---
     const activeDescendantId = useMemo(() => {
@@ -294,14 +296,14 @@ import { shallow } from 'zustand/shallow';
               Quests
             </h2>
             <div className="flex items-center space-x-2">
-              {firstFlameQuest && (
+              {safeFirstFlameQuest && (
                 <Button
                   ref={headerFirstFlameButtonRef}
                   variant="ghost"
                   size="sm"
                   onClick={onSelectFirstFlameFromHeader}
-                  aria-label={`Begin ${firstFlameQuest.name}`}
-                  title={`Begin ${firstFlameQuest.name}`}
+                  aria-label={`Begin ${safeFirstFlameQuest.name}`}
+                  title={`Begin ${safeFirstFlameQuest.name}`}
                   className="text-primary hover:text-primary/90"
                   data-testid="header-first-flame-button"
                 >
