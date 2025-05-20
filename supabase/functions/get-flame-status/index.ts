@@ -22,7 +22,11 @@ const DAY_1_PATH    = `${DAYDEF_PREFIX}day-1.json`;
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Cache-Control': 'no-store' },
+    headers: {
+      ...corsHeaders,
+      'Cache-Control': 'no-store',
+      'Content-Type' : 'application/json',
+    },
   });
 
 /** Supabase storage occasionally returns Uint8Array in Edge Functions */
@@ -35,7 +39,10 @@ const decodeStorage = async (blob: unknown): Promise<string> =>
 Deno.serve(
   withCors(async (req) => {
     /* Method guard (OPTIONS handled by withCors) */
-    if (req.method !== 'GET') return json({ error: 'METHOD_NOT_ALLOWED' }, 405);
+    if (req.method !== 'GET' && req.method !== 'POST')
+      return json({ error: 'METHOD_NOT_ALLOWED' }, 405);
+
+    if (req.method === 'POST') await req.json();
 
     /* Auth guard */
     const jwt = req.headers.get('Authorization') ?? '';
