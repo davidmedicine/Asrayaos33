@@ -24,7 +24,7 @@ import {
 import { useAuth } from '../AuthContext';
 import {
   FIRST_FLAME_RITUAL_SLUG,
-  FIRST_FLAME_DAY_ONE_ROUTE,
+  AppRoutes,
   QUEST_QUERY_GC_TIME,
   QUEST_QUERY_STALE_TIME,
   sortQuests,
@@ -169,8 +169,8 @@ export const useUnifiedChatPanelData = ({
     try { // try-catch added by diff
       const data = await qc.fetchQuery(buildFlameStatusQueryOpts(userId));
       if (data.overallProgress?.current_day_target === 1) {
-        router.replace(FIRST_FLAME_DAY_ONE_ROUTE);
-        announceToSR('Navigating to First Flame – Day 1', { politeness: 'assertive' }); // Non-breaking space changed to regular space by diff, keeping diff's version
+        router.replace(AppRoutes.RitualDayOne);
+        announceToSR('Navigating to First Flame – Day 1', { politeness: 'assertive' });
       }
     } catch (error) { // catch block added by diff
         if (!(error instanceof SilentError)) {
@@ -210,6 +210,34 @@ export const useUnifiedChatPanelData = ({
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchInput(e.target.value);
   }, []);
+
+  /**
+   * Called after the user hits the First‑Flame CTA. Boots the ritual on the
+   * backend, prefetches Day 1 data and navigates to the ritual screen once
+   * ready.
+   */
+  const handleBeginFirstFlame = useCallback(async () => {
+    await bootstrapFirstFlame();
+
+    if (userId) {
+      try {
+        await qc.prefetchQuery(buildFlameStatusQueryOpts(userId));
+      } catch (err) {
+        if (!(err instanceof SilentError)) {
+          // eslint-disable-next-line no-console
+          console.error('[handleBeginFirstFlame] prefetch failed', err);
+        }
+      }
+    }
+
+    const flameQuest = quests.find((q) => q.isFirstFlameRitual);
+    if (flameQuest && !hasDoneInitialAutoSelect.current) {
+      selectQuestSafely(flameQuest.id);
+      hasDoneInitialAutoSelect.current = true;
+    }
+
+    router.replace(AppRoutes.RitualDayOne);
+  }, [bootstrapFirstFlame, userId, qc, quests, selectQuestSafely, router]);
 
   /**
    * 🔥 bootstrapFirstFlame
@@ -307,5 +335,6 @@ export const useUnifiedChatPanelData = ({
     handleSelectQuest: selectQuestSafely,
     handleRetryLoad,
     bootstrapFirstFlame,
+    handleBeginFirstFlame,
   };
 };
