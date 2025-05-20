@@ -62,7 +62,10 @@ Deno.serve(
       .select('quest_id, current_day_target, updated_at')
       .maybeSingle();
 
-    if (pe) return json({ error: 'DB' }, 500);
+    if (pe) {
+      console.error('[get-flame-status] flame_progress select error', pe);
+      return json({ error: 'DB' }, 500);
+    }
 
     const isFresh =
       progress &&
@@ -81,8 +84,14 @@ Deno.serve(
         sbUser.storage.from(DAYDEF_BUCKET).download(DAY_1_PATH),
       ]);
 
-      if (ie)             return json({ error: 'DB'      }, 500);
-      if (se || !dayBlob) return json({ error: 'STORAGE' }, 500);
+      if (ie) {
+        console.error('[get-flame-status] flame_imprints error', ie);
+        return json({ error: 'DB' }, 500);
+      }
+      if (se || !dayBlob) {
+        console.error('[get-flame-status] download day-1 error', se);
+        return json({ error: 'STORAGE' }, 500);
+      }
 
       const dayJson = JSON.parse(await decodeStorage(dayBlob));
 
@@ -96,15 +105,17 @@ Deno.serve(
     }
 
     /* ───── STALE PATH ───── */
-    const { data: { user } } = await sbUser.auth.getUser();
+    const { data: { user }, error: userErr } = await sbUser.auth.getUser();
+    if (userErr) console.error('[get-flame-status] auth.getUser error', userErr);
 
-    await sbAdmin.functions.invoke('realtime-broadcast', {
+    const { error: invokeErr } = await sbAdmin.functions.invoke('realtime-broadcast', {
       body: {
         channel: 'flame_status',
         event  : 'missing',
         payload: { user_id: user?.id },
       },
     });
+    if (invokeErr) console.error('[get-flame-status] realtime-broadcast error', invokeErr);
 
     return json({ processing: true }, 202);
   }),
