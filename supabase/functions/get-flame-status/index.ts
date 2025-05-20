@@ -43,7 +43,13 @@ Deno.serve(
       if (req.method !== 'GET' && req.method !== 'POST')
         return json({ error: 'METHOD_NOT_ALLOWED' }, 405);
 
-      if (req.method === 'POST') await req.json();
+      if (req.method === 'POST') {
+        try {
+          await req.json();
+        } catch (err) {
+          console.error('[get-flame-status] failed to parse body', err);
+        }
+      }
 
       /* Auth guard */
       const jwt = req.headers.get('Authorization') ?? '';
