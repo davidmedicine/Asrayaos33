@@ -32,13 +32,25 @@ export function withCors(
     }
 
     // 2️⃣  Execute the actual business logic
-    const res = await handler(req);
+    try {
+      const res = await handler(req);
 
-    // 3️⃣  Add (or overwrite) CORS headers on the way out
-    for (const [key, value] of Object.entries(corsHeaders)) {
-      res.headers.set(key, value as string);
+      // 3️⃣  Add (or overwrite) CORS headers on the way out
+      for (const [key, value] of Object.entries(corsHeaders)) {
+        res.headers.set(key, value as string);
+      }
+
+      return res;
+    } catch (err) {
+      console.error('[withCors] uncaught error', err);
+      const res = new Response(
+        JSON.stringify({ error: 'SERVER_ERROR' }),
+        { status: 500 },
+      );
+      for (const [k, v] of Object.entries(corsHeaders)) {
+        res.headers.set(k, v as string);
+      }
+      return res;
     }
-
-    return res;
   };
 }
