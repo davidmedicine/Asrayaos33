@@ -109,6 +109,10 @@ export const useUnifiedChatPanelData = ({
   const [errorDisplay, setErrorDisplay] = useState<{ message: string; code?: any } | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const deferredQuery = useDeferredValue(searchInput.trim().toLowerCase());
+  const prevDeferredQueryRef = useRef(deferredQuery);
+  useEffect(() => {
+    prevDeferredQueryRef.current = deferredQuery;
+  }, [deferredQuery]);
   const [_isPendingTransitionSearch, startTransition] = useTransition(); // Renamed by diff (_isPendingSearch -> _isPendingTransitionSearch)
 
   const hasDoneInitialAutoSelect = useRef(false);
@@ -250,17 +254,22 @@ export const useUnifiedChatPanelData = ({
 
   /* ------------- Error Display Effect for listQ query ----------- */ // Added by diff
   useEffect(() => {
+    let newDisplay: { message: string; code?: any } | null = null;
     if (listQ.isError && !(listQ.error instanceof SilentError)) {
-        const message = listQ.error instanceof Error ? listQ.error.message : 'Failed to load quests.';
-        const code = listQ.error instanceof FunctionsHttpError ? listQ.error.context?.status : undefined;
-        setErrorDisplay({ message, code });
-    } else if (!listQ.isError && errorDisplay) {
-        // Clear error if query is no longer in error state (e.g. after successful retry)
-        // but only if the current errorDisplay is related to listQ (this is a simplification)
-        setErrorDisplay(null);
+      const message =
+        listQ.error instanceof Error ? listQ.error.message : 'Failed to load quests.';
+      const code = listQ.error instanceof FunctionsHttpError ? listQ.error.context?.status : undefined;
+      newDisplay = { message, code };
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listQ.isError, listQ.error]); // errorDisplay is intentionally omitted to avoid loop if setErrorDisplay caused re-render
+
+    const hasChanged =
+      (newDisplay && (!errorDisplay || errorDisplay.message !== newDisplay.message || errorDisplay.code !== newDisplay.code)) ||
+      (!newDisplay && errorDisplay);
+
+    if (hasChanged) {
+      setErrorDisplay(newDisplay);
+    }
+  }, [listQ.isError, listQ.error, errorDisplay]);
 
 
   /* ---------------- Filters & selectors ---------------- */
@@ -285,7 +294,7 @@ export const useUnifiedChatPanelData = ({
     isPendingSearch,
 
     quests, // All available quests, sorted
-    listItemData: filteredQuests as QuestForListItemAugmented[], // Cast added by diff
+    listItemData: (filteredQuests ?? []) as QuestForListItemAugmented[],
 
     firstFlameQuest: quests.find((q) => q.isFirstFlameRitual),
     activeQuestId,

@@ -62,7 +62,10 @@ Deno.serve(
       .select('quest_id, current_day_target, updated_at')
       .maybeSingle();
 
-    if (pe) return json({ error: 'DB' }, 500);
+    if (pe) {
+      console.error('flame_progress error', pe);
+      return json({ error: 'DB' }, 500);
+    }
 
     const isFresh =
       progress &&
@@ -81,8 +84,14 @@ Deno.serve(
         sbUser.storage.from(DAYDEF_BUCKET).download(DAY_1_PATH),
       ]);
 
-      if (ie)             return json({ error: 'DB'      }, 500);
-      if (se || !dayBlob) return json({ error: 'STORAGE' }, 500);
+      if (ie) {
+        console.error('flame_imprints error', ie);
+        return json({ error: 'DB' }, 500);
+      }
+      if (se || !dayBlob) {
+        console.error('storage download error', se);
+        return json({ error: 'STORAGE' }, 500);
+      }
 
       const dayJson = JSON.parse(await decodeStorage(dayBlob));
 
@@ -98,13 +107,17 @@ Deno.serve(
     /* ───── STALE PATH ───── */
     const { data: { user } } = await sbUser.auth.getUser();
 
-    await sbAdmin.functions.invoke('realtime-broadcast', {
-      body: {
-        channel: 'flame_status',
-        event  : 'missing',
-        payload: { user_id: user?.id },
-      },
-    });
+    try {
+      await sbAdmin.functions.invoke('realtime-broadcast', {
+        body: {
+          channel: 'flame_status',
+          event  : 'missing',
+          payload: { user_id: user?.id },
+        },
+      });
+    } catch (be) {
+      console.error('broadcast invoke error', be);
+    }
 
     return json({ processing: true }, 202);
   }),

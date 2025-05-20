@@ -9,6 +9,7 @@ import React, {
     useMemo,
     useLayoutEffect,
   } from 'react';
+  import { shallow } from 'zustand/shallow';
   import { FixedSizeList, ListChildComponentProps } from 'react-window';
   import AutoSizer from 'react-virtualized-auto-sizer';
   import { SearchIcon, FlameIcon, PlusCircleIcon } from 'lucide-react'; // Added PlusCircleIcon
@@ -154,6 +155,8 @@ import React, {
   }) => {
     const listContainerRef = useRef<HTMLDivElement>(null); // For the listbox container
     const fixedListRef = useRef<FixedSizeList>(null); // For react-window API
+    const prevListItemsRef = useRef<QuestForListItemAugmented[]>(listItemData);
+    const prevActiveQuestIdRef = useRef<string | null>(activeQuestId);
   
     // State for managing the ARIA active descendant (keyboard focus)
     const [activeDescendantIndex, setActiveDescendantIndex] = useState<number>(-1);
@@ -174,18 +177,23 @@ import React, {
   
     // --- Effect to Sync Active Descendant with External Active Quest ID ---
     useEffect(() => {
+      if (shallow(prevListItemsRef.current, listItemData) && prevActiveQuestIdRef.current === activeQuestId) {
+        return;
+      }
+      prevListItemsRef.current = listItemData;
+      prevActiveQuestIdRef.current = activeQuestId;
+
       const currentGlobalActiveIndex = activeQuestId
         ? listItemData.findIndex((item) => item.id === activeQuestId)
         : -1;
-  
+
       if (currentGlobalActiveIndex !== activeDescendantIndex) {
         setActiveDescendantIndex(currentGlobalActiveIndex);
-        // Scroll to the newly active item if list is already mounted and visible
         if (hasMounted.current && currentGlobalActiveIndex !== -1 && fixedListRef.current) {
           fixedListRef.current.scrollToItem(currentGlobalActiveIndex, 'smart');
         }
       }
-    }, [activeQuestId, listItemData, activeDescendantIndex]); // Removed fixedListRef from deps
+    }, [activeQuestId, listItemData, activeDescendantIndex]);
   
     // --- Effect to Scroll to Keyboard-Focused Item ---
     useLayoutEffect(() => {
@@ -364,7 +372,7 @@ import React, {
           )}
   
           {/* Empty States */}
-          {!isLoadingBackground && listItemData.length === 0 && (
+          {!isLoadingBackground && (listItemData?.length ?? 0) === 0 && (
             <div className="p-6 text-center text-muted-foreground" role="status">
               {searchQuery
                 ? `No quests found matching "${searchQuery}".`
@@ -373,7 +381,7 @@ import React, {
           )}
   
           {/* Render List: Virtualized or Static */}
-          {listItemData.length > 0 && (
+          {(listItemData?.length ?? 0) > 0 && (
             shouldVirtualize ? (
               // --- Virtualized List ---
               <AutoSizer>
@@ -394,7 +402,7 @@ import React, {
             ) : (
               // --- Static List ---
               <div className="p-1 space-y-px">
-                {listItemData.map((questItem, index) => {
+                {listItemData?.map((questItem, index) => {
                   const isActive = activeQuestId === questItem.id;
                   const isFocusedByKeyboard = activeDescendantIndex === index; // For visual keyboard focus indication
                   const questListItemId = `${panelId}-quest-item-${questItem.id}`;

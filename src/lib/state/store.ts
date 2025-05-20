@@ -180,6 +180,8 @@ export const useStore = create<StoreState>()(
 
 export const useAppStore = useStore; // Alias
 
+export { createNotificationSlice, useNotificationStore } from './slices/notificationSlice';
+
 /* -------------------------------------------------------------------------- */
 /* 6.  Convenience Selectors & Slice Hooks Guidance                           */
 /* -------------------------------------------------------------------------- */

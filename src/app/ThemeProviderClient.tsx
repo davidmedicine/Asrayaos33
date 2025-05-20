@@ -130,8 +130,7 @@ export function ThemeProviderClient({
                  }
             }, 500);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // Run only on initial mount
+    }, [possibleThemes, defaultTheme, theme, applyThemeToDOM]);
 
     // --- Theme Change Handler ---
     const setTheme = useCallback((newTheme: Theme) => {
