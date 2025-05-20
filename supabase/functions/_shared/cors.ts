@@ -15,6 +15,10 @@
 /** Fallback origin for local development */
 const DEV_ORIGIN_FALLBACK = '*';
 
+// Detect local environment for functions that behave differently in dev
+export const ENV_IS_LOCAL =
+  Deno.env.get('SUPABASE_URL')?.includes('localhost') ?? false;
+
 /**
  * Non‑simple headers automatically attached by the Supabase JS client (and
  * therefore present on every request from your front‑end).  **Every one of
