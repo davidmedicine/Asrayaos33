@@ -68,6 +68,10 @@ Deno.serve(
         db  : { schema: 'ritual' },
       });
 
+      const { data: { user }, error: userErr } = await sbUser.auth.getUser();
+      if (userErr) console.error('[get-flame-status] auth.getUser error', userErr);
+      console.info('[EF:get-flame-status] start', { user_id: user?.id });
+
     /* 1️⃣  Get progress row (cheap) */
     const {
       data: progress,
@@ -121,8 +125,6 @@ Deno.serve(
     }
 
     /* ───── STALE PATH ───── */
-    const { data: { user }, error: userErr } = await sbUser.auth.getUser();
-    if (userErr) console.error('[get-flame-status] auth.getUser error', userErr);
 
     try {
       const { error: invokeErr } =
