@@ -339,6 +339,8 @@ export async function submitImprint(
 
 /** Query key for fetching flame status. */
 export const FLAME_STATUS_QUERY_KEY = ['flame-status'] as const;
+/** Query key for the user's quest list. */
+export const QUESTS_QUERY_KEY = ['list-quests'] as const;
 
 /**
  * Default options for `useQuery` hook when fetching flame status.

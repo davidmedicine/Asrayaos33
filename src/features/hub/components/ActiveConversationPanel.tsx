@@ -23,6 +23,7 @@ import { ChatInputBar } from '../../chat/components/ChatInputBar';
 import { MessageRenderer, CombinedContentItem } from '../../chat/components/messages/MessageRenderer';
 import { TypingIndicator } from '../../chat/components/TypingIndicator';
 import { OracleOrb } from './oracleOrb';
+import { useFlameBroadcast } from '@/hooks/useFlameBroadcast';
 
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
@@ -79,6 +80,8 @@ const ActiveConversationPanelComponent: React.FC<ActiveConversationPanelProps> =
   );
 
   const queryClient = useQueryClient();
+  // Listen for realtime flame status updates
+  useFlameBroadcast();
 
   const activeConversation = useMemo((): Quest | null =>
     (quests ?? []).find((c) => c.id === activeQuestId) || null
