@@ -38,27 +38,28 @@ const decodeStorage = async (blob: unknown): Promise<string> =>
 /* ─────────────── MAIN ──────────────── */
 Deno.serve(
   withCors(async (req) => {
-    /* Method guard (OPTIONS handled by withCors) */
-    if (req.method !== 'GET' && req.method !== 'POST')
-      return json({ error: 'METHOD_NOT_ALLOWED' }, 405);
+    try {
+      /* Method guard (OPTIONS handled by withCors) */
+      if (req.method !== 'GET' && req.method !== 'POST')
+        return json({ error: 'METHOD_NOT_ALLOWED' }, 405);
 
-    if (req.method === 'POST') await req.json();
+      if (req.method === 'POST') await req.json();
 
-    /* Auth guard */
-    const jwt = req.headers.get('Authorization') ?? '';
-    if (!jwt.startsWith('Bearer ')) return json({ error: 'AUTH' }, 401);
+      /* Auth guard */
+      const jwt = req.headers.get('Authorization') ?? '';
+      if (!jwt.startsWith('Bearer ')) return json({ error: 'AUTH' }, 401);
 
-    /* Supabase clients */
-    const sbUser = createClient(SB_URL, SB_ANON, {
-      global: { headers: { Authorization: jwt } },
-      auth  : { persistSession: false },
-      db    : { schema: 'ritual' },
-    });
+      /* Supabase clients */
+      const sbUser = createClient(SB_URL, SB_ANON, {
+        global: { headers: { Authorization: jwt } },
+        auth  : { persistSession: false },
+        db    : { schema: 'ritual' },
+      });
 
-    const sbAdmin = createClient(SB_URL, SB_SVC, {
-      auth: { persistSession: false },
-      db  : { schema: 'ritual' },
-    });
+      const sbAdmin = createClient(SB_URL, SB_SVC, {
+        auth: { persistSession: false },
+        db  : { schema: 'ritual' },
+      });
 
     /* 1️⃣  Get progress row (cheap) */
     const {
@@ -124,6 +125,10 @@ Deno.serve(
     });
     if (invokeErr) console.error('[get-flame-status] realtime-broadcast error', invokeErr);
 
-    return json({ processing: true }, 202);
+      return json({ processing: true }, 202);
+    } catch (err) {
+      console.error('[get-flame-status] unhandled error', err);
+      return json({ error: 'SERVER_ERROR' }, 500);
+    }
   }),
 );
