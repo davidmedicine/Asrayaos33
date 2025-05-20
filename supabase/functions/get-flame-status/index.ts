@@ -115,7 +115,7 @@ Deno.serve(
         progress,
         imprints,
         dayDefinition: dayJson,
-      });
+      }, 200);
     }
 
     /* ───── STALE PATH ───── */
