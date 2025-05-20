@@ -99,6 +99,8 @@ function UnifiedChatListPanelImpl({
     initialQuestSlugToSelect,
   });
 
+  const safeFirstFlameQuest = firstFlameQuest ?? null;
+
   /* ----------------------- View‑Transition Flag ------------------------ */
   const { enableViewTransition: devToolsVTEnabled } = useDevToolsStore(
     s => ({ enableViewTransition: s.enableViewTransition }),
@@ -119,12 +121,12 @@ function UnifiedChatListPanelImpl({
 
   /* --------------------------- Handlers -------------------------------- */
   const handleSelectFirstFlameFromHeader = useCallback(() => {
-    if (firstFlameQuest) handleSelectQuest(firstFlameQuest.id);
-  }, [firstFlameQuest, handleSelectQuest]);
+    if (safeFirstFlameQuest) handleSelectQuest(safeFirstFlameQuest.id);
+  }, [safeFirstFlameQuest, handleSelectQuest]);
 
   const handleSelectFirstFlameFromHero = useCallback(() => {
-    firstFlameQuest ? handleSelectQuest(firstFlameQuest.id) : handleCreateNewQuest();
-  }, [firstFlameQuest, handleSelectQuest, handleCreateNewQuest]);
+    safeFirstFlameQuest ? handleSelectQuest(safeFirstFlameQuest.id) : handleCreateNewQuest();
+  }, [safeFirstFlameQuest, handleSelectQuest, handleCreateNewQuest]);
 
   /* ------------------------ Early‑return Error ------------------------- */
   if (uiPhase === UIPanelPhase.ERROR) {
@@ -162,7 +164,7 @@ function UnifiedChatListPanelImpl({
             uiPhase={uiPhase}
             isLoadingInitial={isLoadingInitial}
             errorDisplay={errorDisplay}
-            firstFlameQuest={firstFlameQuest}
+            firstFlameQuest={safeFirstFlameQuest}
             isInitialLoadComplete={isInitialLoadComplete}
             questsAvailable={quests.length > 0}
             onSelectFirstFlame={handleSelectFirstFlameFromHero}

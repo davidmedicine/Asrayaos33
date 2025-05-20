@@ -65,6 +65,8 @@ const HeroIntroScreenComp: React.FC<Props> = (props) => {
     questsAvailable,
   } = props;
 
+  const safeFirstFlameQuest = firstFlameQuest ?? null;
+
   const router         = useRouter();
   const containerRef   = useRef<HTMLDivElement>(null);
   const prefersReduced = useMediaQuery('(prefers-reduced-motion: reduce)');
@@ -158,7 +160,7 @@ const HeroIntroScreenComp: React.FC<Props> = (props) => {
     }
 
     // ––– at least one quest exists –––
-    if (isInitialLoadComplete && questsAvailable && firstFlameQuest) {
+    if (isInitialLoadComplete && questsAvailable && safeFirstFlameQuest) {
       return (
         <>
           <h3 className="text-xl font-semibold">Your path awaits</h3>
@@ -166,7 +168,7 @@ const HeroIntroScreenComp: React.FC<Props> = (props) => {
             Continue your adventure or embark on the First Flame.
           </p>
           <Button ref={heroButtonRef} size="lg" onClick={handleBeginExisting}>
-            {firstFlameQuest.name ?? 'Begin First Flame'}
+            {safeFirstFlameQuest.name ?? 'Begin First Flame'}
           </Button>
         </>
       );
