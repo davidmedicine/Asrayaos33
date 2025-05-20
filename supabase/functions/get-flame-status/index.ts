@@ -116,14 +116,20 @@ Deno.serve(
     const { data: { user }, error: userErr } = await sbUser.auth.getUser();
     if (userErr) console.error('[get-flame-status] auth.getUser error', userErr);
 
-    const { error: invokeErr } = await sbAdmin.functions.invoke('realtime-broadcast', {
-      body: {
-        channel: 'flame_status',
-        event  : 'missing',
-        payload: { user_id: user?.id },
-      },
-    });
-    if (invokeErr) console.error('[get-flame-status] realtime-broadcast error', invokeErr);
+    try {
+      const { error: invokeErr } =
+        await sbAdmin.functions.invoke('realtime-broadcast', {
+          body: {
+            channel: 'flame_status',
+            event  : 'missing',
+            payload: { user_id: user?.id },
+          },
+        });
+      if (invokeErr)
+        console.error('[get-flame-status] realtime-broadcast error', invokeErr);
+    } catch (err) {
+      console.error('[get-flame-status] realtime-broadcast invoke failed', err);
+    }
 
       return json({ processing: true }, 202);
     } catch (err) {
