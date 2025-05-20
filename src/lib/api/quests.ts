@@ -677,6 +677,11 @@ export async function submitImprint(
 
 /** Base query key for flame status. Append user ID for user-specific status. */
 export const FLAME_STATUS_BASE_QUERY_KEY = ["flame-status"] as const;
+/**
+ * Alias used by hooks expecting a plain FLAME_STATUS_QUERY_KEY constant.
+ * Keeps backward compatibility with prior exports.
+ */
+export const FLAME_STATUS_QUERY_KEY = FLAME_STATUS_BASE_QUERY_KEY;
 
 /**
  * Type for flame status query keys. Can be global or user-specific.
