@@ -277,21 +277,25 @@ export const useUnifiedChatPanelData = ({
 
 
   /* ------------- Error Display Effect for listQ query ----------- */
+  const prevErr = useRef<{ message: string; code?: number } | null>(null);
   useEffect(() => {
     if (listQ.isError && !(listQ.error instanceof SilentError)) {
       const message =
         listQ.error instanceof Error ? listQ.error.message : 'Failed to load quests.';
       const code =
         listQ.error instanceof FunctionsHttpError ? listQ.error.context?.status : undefined;
-      setErrorDisplay((prev) =>
-        prev?.message !== message || prev?.code !== code ? { message, code } : prev,
-      );
+
+      if (!prevErr.current ||
+          prevErr.current.message !== message ||
+          prevErr.current.code !== code) {
+        prevErr.current = { message, code };
+        setErrorDisplay(prevErr.current);
+      }
     } else if (!listQ.isError && errorDisplay) {
-      // Clear error if query is no longer in error state (e.g. after successful retry)
-      // but only if the current errorDisplay is related to listQ (this is a simplification)
+      prevErr.current = null;
       setErrorDisplay(null);
     }
-  }, [listQ.isError, listQ.error, errorDisplay]);
+  }, [listQ.isError, listQ.error]);
 
 
   /* ---------------- Filters & selectors ---------------- */
