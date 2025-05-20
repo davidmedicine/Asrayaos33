@@ -6,6 +6,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 // ─────────────────── shared helpers ───────────────────
 import { corsHeaders } from '../_shared/cors.ts';
 import { withCors }   from '../_shared/withCors.ts';
+import { FlameDayDefinitionZ } from '../_shared/zod/flameDayDefinition.ts';
 
 /* ──────────────── ENV ──────────────── */
 const SB_URL  = Deno.env.get('SUPABASE_URL')!;
@@ -107,14 +108,15 @@ Deno.serve(
         return json({ error: 'STORAGE' }, 500);
       }
 
-      const dayJson = JSON.parse(await decodeStorage(dayBlob));
+      const dayJson       = JSON.parse(await decodeStorage(dayBlob));
+      const dayDefinition = FlameDayDefinitionZ.parse(dayJson);
 
       return json({
         processing  : false,
         dataVersion : Date.now(),
         progress,
         imprints,
-        dayDefinition: dayJson,
+        dayDefinition,
       });
     }
 
