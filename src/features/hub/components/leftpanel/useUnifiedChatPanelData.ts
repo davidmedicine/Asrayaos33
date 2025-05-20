@@ -276,6 +276,8 @@ export const useUnifiedChatPanelData = ({
   // This `isPendingSearch` indicates if the displayed list might be stale due to active search input.
   const isPendingSearch = listQ.isFetching && searchInput.trim().toLowerCase() !== deferredQuery; // .toLowerCase() added by diff, searchInput.trim() was searchInput.trim().toLowerCase() in diff, base was searchInput.trim()
 
+  const listItemData = filteredQuests ?? [];
+
 
   /* ---------------- Return API ---------------- */
   return {
@@ -285,7 +287,7 @@ export const useUnifiedChatPanelData = ({
     isPendingSearch,
 
     quests, // All available quests, sorted
-    listItemData: filteredQuests as QuestForListItemAugmented[], // Cast added by diff
+    listItemData: listItemData as QuestForListItemAugmented[],
 
     firstFlameQuest: quests.find((q) => q.isFirstFlameRitual),
     activeQuestId,
