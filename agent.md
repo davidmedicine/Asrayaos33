@@ -1,112 +1,58 @@
-System instructions (keep at top)
+# 🔥 Critical bug-hunt: “First-Flame doesn’t load + UI loops”
 
-You are working inside the repo asrayaos8.4 (monorepo root: /Users/davebentley/Documents/Asrayaos16.4).
+You’re inside the Asraya OS mono-repo (see file_map).  
+Symptoms in browser:
 
-All changes must compile with pnpm dev and pass pnpm lint && pnpm typecheck.
+* `get-flame-status` returns **202 Processing** repeatedly; no subsequent **200** ever arrives.
+* Quest list renders, but `firstFlameQuest` stays `undefined`, so **ActiveConversationPanel** never hydrates ⇒ `Cannot read properties of undefined (reading 'map')`.
+* React warns **“Maximum update depth exceeded”** (useUnifiedChatPanelData line 256).
+* No entries appear in Supabase Edge-Function logs even though requests show in Network tab.
 
-Never introduce breaking API changes to public exports unless explicitly asked.
+### 1  Back-end (Edge Function: `get-flame-status`)
+1. **Reproduce** the 202 loop with `curl` using a valid session JWT.  
+   *Confirm the response body is `{processing:true}` and status 202.*
+2. **Trace early-exit:** The function sets `processing:true` when `flame_progress.updated_at` is older than `STALE_MS`.  
+   *Hypothesis:* `flame_progress` row is **never created** for new users, so the function always treats the record as “stale”.  
+   1. In `_shared/db/firstFlame.ts` or similar, ensure `getOrCreateFirstFlameProgress()` runs during quest creation or on first ritual bootstrap.  
+   2. In the 202 path the function calls `realtime-broadcast` with event `missing`; confirm that helper fires **flame_status:ready** later (check Realtime dashboard).  
+3. **Logging:** add `console.log('[EF:get-flame-status] start', { user_id })` and similar `INFO` lines; ensure you return **JSON** with `Content-Type: application/json` so Supabase parses logs correctly.  :contentReference[oaicite:0]{index=0}  
+4. **Return 200** after seeding day-1:  
+   * If progress row is created, fetch storage object `5-day/day-1.json`, validate with `FlameDayDefinitionZ`, and include it in the 200 payload.  
+   * Be sure to decode `Uint8Array` payloads from Storage — see Supabase Storage docs.  :contentReference[oaicite:1]{index=1}  
 
-Follow project conventions: camelCase for hooks, PascalCase for components, snake_case for SQL/edge-fn identifiers.
+### 2  Front-end
+1. **`fetchFlameStatus` (src/lib/api/quests.ts)**
+   * When server replies 202 + `processing:true`, throw `ProcessingError` so React-Query retries with back-off.  :contentReference[oaicite:2]{index=2}  
+   * When 200, validate `dataVersion` and update `firstFlameSlice`.
+2. **React-Query options**
+   * In `defaultFlameStatusQueryOptions` set  
+     ```ts
+     retry: (n, err) => (err as any)?.processing === true && n < 5,
+     retryDelay: attempt => Math.min(1000 * 2 ** attempt, 10000),
+     ```
+     to poll until the ready broadcast lands.  :contentReference[oaicite:3]{index=3}
+3. **Broadcast listener** (`useFlameBroadcast.ts`)
+   * Listen for `flame_status:ready`; on receipt, *manually* invalidate **both** `FLAME_STATUS_QUERY_KEY` and `QUESTS_QUERY_KEY`.  
+     React-Query will then fetch the fresh 200 payload and hydrate panels.
+4. **`useUnifiedChatPanelData`**
+   * Guard against `quests === undefined` before `.map()` to stop crash loops.  
+   * Remove any `setState` calls from an effect **without** dependency arrays (fixes “maximum update depth”).  :contentReference[oaicite:4]{index=4}  
+5. **Auto-select logic**
+   * After `listQ` success, if `quests.find(q ⇒ q.isFirstFlameRitual)` exists, call `selectQuestSafely()`.  
+   * Inside that helper, **await** `qc.fetchQuery(buildFlameStatusQueryOpts(uid))` so context panel waits until day-1 JSON is present before rendering.
 
-When you touch React files, ensure they remain React 18 / Next-13 app-router compatible ("use client" where needed).
+### 3  Verification checklist
+- [ ] `curl` to `get-flame-status` now returns **200** with day-1 JSON for a new user.
+- [ ] Supabase Function logs show `EF_GET_FLAME_STATUS_SUCCESS`.  :contentReference[oaicite:5]{index=5}  
+- [ ] Browser shows **First Flame** quest at top of list, chat + context panels hydrate without errors.
+- [ ] No React “update depth” warnings in console.
 
-➊ Fix the Maximum-Update-Depth loop in useUnifiedChatPanelData.ts
-Bug: Console shows “Maximum update depth exceeded” originating at line 256 of useUnifiedChatPanelData.ts; causes React 18 render storm. This is classic setState→re-render→useEffect loop. 
-Stack Overflow
-Stack Overflow
+### 4  Deliverables
+1. Commit messages:
+   * **edge:** fix get-flame-status stale loop + JSON headers
+   * **client:** robust polling + broadcast for flame status
+   * **ui:** guard quest list null-safe, stop render loop
+2. PR description must reference this ticket and include BEFORE/AFTER videos.
 
-Root cause: The useEffect that syncs activeDescendantIndex relies on listItemData, which itself is derived from the very state mutated inside the effect; deps list is missing a stable ref or equality guard. 
-Stack Overflow
-
-Fix:
-
-Wrap expensive arrays with useRef + shallow‐compare before calling setActiveDescendantIndex.
-
-Add strict dependency arrays (React docs: never omit when you call setState inside effect). 
-Stack Overflow
-
-Guard setState calls so they only fire when new value !== old (use === / shallow-equality).
-
-➋ Guard against undefined.map in Quest list
-Bug: “Cannot read properties of undefined (reading 'map')” when listItemData hasn’t arrived yet. 
-Reddit
-
-Fix:
-
-Always default to an empty array:
-
-ts
-Copy
-Edit
-const listItemData = filteredQuests ?? [];
-In TSX, replace listItemData.map with optional chaining listItemData?.map for extra safety.
-
-➌ Stop the search-input ↔ deferredQuery ping-pong
-isPendingSearch becomes true on every keystroke and retriggers the same useEffect, feeding the depth loop.
-
-Memoise deferredQuery with useDeferredValue once, then in the effect compare with a useRef(prev) to detect real change.
-
-Alternatively keep a single source of truth (searchInput) and compute filteredQuests inside useMemo, no extra state needed. 
-GitHub
-
-➍ Patch the Edge Functions
-A. /functions/list-quests
-You already added the correct JSON Content-Type; keep that.
-
-Make sure return json(responseBody) is executed for both GET and POST paths.
-
-B. /functions/get-flame-status
-Browser shows 500: confirm bucket/key exist (asrayaospublicbucket/5-day/day-1.json) and that storage permissions allow anon read. 
-Stack Overflow
-
-Add console.error around each Supabase call (flame_progress, flame_imprints, Storage download) so logs surface in the Supabase dashboard.
-
-Ensure the function always ends with return json({ processing:true },202) when progress row missing; right now early return may be skipped, leaving the request hanging.
-
-➎ Notification slice import mismatch
-Import path in store.ts uses notificationSlice but file is notificationslice.ts (lower-case s).
-
-Rename the file to notificationSlice.ts (capital S) or change all imports to the lower-case version.
-
-Export both createNotificationSlice and useNotificationStore.
-
-➏ Stabilise useQuestStore.setActiveQuestId
-Provide a no-op fallback only in tests; in production always require the function.
-
-Add runtime check: if (typeof setActiveQuestId !== 'function') throw new Error(...).
-
-➐ Auto-bootstrap Day 1 after First-Flame CTA
-After bootstrapFirstFlame resolves, prefetch the day-1 definition via get-flame-status (already cached in React-Query).
-
-In the callback, set activeQuestId to the First-Flame quest only once (hasDoneInitialAutoSelect ref).
-
-Trigger navigation:
-
-ts
-Copy
-Edit
-router.replace(AppRoutes.RitualDayOne);
-➑ Unit & integration tests
-Add Jest tests for useUnifiedChatPanelData ensuring no state updates fire when dependencies unchanged.
-
-Create Cypress flow: login fresh user → click “Begin ritual” CTA → expect URL /first-flame/day-1 → panels render without errors.
-
-➒ Dev-tools: flip-state cleanup
-In HeroIntroScreen the GSAP hover timeline leaks on fast page swaps. Add tl.revert() on cleanup or wrap timeline in context() API. 
-Reddit
-
-➓ Runbook for the AI
-Search-and-replace: useEffect( blocks without full deps list.
-
-Refactor the 5 hotspots called out above.
-
-Run pnpm dev & watch console - zero red lines.
-
-Commit with message:
-
-pgsql
-Copy
-Edit
-fix(quests): stop infinite render loops & load Day-1 context on first login
-
+> **Execute these steps in order, writing production-grade TypeScript/Deno code, updating Zod schemas & unit tests where needed.**
 
