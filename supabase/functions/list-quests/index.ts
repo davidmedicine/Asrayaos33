@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
   const t0 = performance.now()
 
   if (req.method === 'OPTIONS')
-    return new Response('ok', { headers: corsHeaders })
+    return json({ ok: true })
 
   if (req.method !== 'POST' && req.method !== 'GET')
     return json({ error: 'METHOD_NOT_ALLOWED' }, 405)
@@ -124,6 +124,7 @@ Deno.serve(async (req) => {
     })
 
     const { data: { user }, error: authErr } = await sbUser.auth.getUser()
+    if (authErr) console.error(`[${FN}] auth.getUser error`, authErr)
     if (authErr || !user?.id) return json({ error: 'AUTH' }, 401)
 
     /*── Ensure First-Flame quest exists & caller is a participant ─*/
@@ -134,10 +135,11 @@ Deno.serve(async (req) => {
       is_pinned: true,
     })
 
-    await sbAdmin.from('quest_participants').upsert(
+    const { error: upsertErr } = await sbAdmin.from('quest_participants').upsert(
       { quest_id: ff.id, user_id: user.id, role: 'participant' },
       { onConflict: 'quest_id,user_id', ignoreDuplicates: true },
     )
+    if (upsertErr) console.error(`[${FN}] quest_participants upsert error`, upsertErr)
 
     /*── Fetch quests visible to the caller ───────────────────────*/
     const { data, error: fetchErr } = await sbUser
@@ -147,7 +149,10 @@ Deno.serve(async (req) => {
         agent_id, last_message_preview, unread_count, community_id
       `)
 
-    if (fetchErr) throw fetchErr
+    if (fetchErr) {
+      console.error(`[${FN}] quests select error`, fetchErr)
+      throw fetchErr
+    }
 
     const rows     = (data as QuestRow[]).map(mapRow)
     const payload  = rows.sort((a, b) => {
