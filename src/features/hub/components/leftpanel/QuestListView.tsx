@@ -135,7 +135,7 @@ import { shallow } from 'zustand/shallow';
   // === Main List View Component ===
   const QuestListViewComponent: React.FC<QuestListViewProps> = ({
     panelId,
-    listItemData,
+    listItemData = [],
     activeQuestId,
     handleSelectQuest,
     handleSearchChange,
