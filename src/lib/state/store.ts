@@ -70,7 +70,7 @@ import { createDevToolsSlice,       type DevToolsState       } from './slices/de
 import { createDraftsSlice,         type DraftsSlice         } from './slices/draftsSlice';
 import { createLayoutSlice,         type LayoutSlice         } from './slices/layoutSlice';
 import { createModalSlice,          type ModalState          } from './slices/modalSlice';
-import { createNotificationSlice,   type NotificationSlice   } from './slices/notificationslice'; // Standardized path
+import { createNotificationSlice,   type NotificationSlice   } from './slices/notificationSlice'; // Standardized path
 import { createPresenceSlice,       type PresenceSlice       } from './slices/presenceSlice';
 import { createQuestSlice,          type QuestSlice          } from './slices/questslice';      // Standardized path
 // createSceneSlice defined above

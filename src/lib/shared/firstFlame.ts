@@ -1,11 +1,3 @@
-/* ──────────────── src/lib/shared/firstFlame.ts ────────────────
- *  “First Flame” – front-end helpers & Day-1 definition
- *  – Public constants               (unchanged)
- *  – Ritual-stage re-exports        (unchanged)
- *  – Strongly-typed JSON import     (NEW)
- *  – Default export = Day-1 object  (NEW)
- * ------------------------------------------------------------- */
-
 import type { ReadonlyDeep } from 'type-fest';
 
 /*--------------------------------------------------------------*
@@ -34,7 +26,7 @@ export type {
 }                             from '@ritual/ritual.constants';
 
 /*--------------------------------------------------------------*
- | 3 · Day-1 JSON  (imported via `resolveJsonModule: true`)      |
+ | 3 · Day-1 JSON (imported via `resolveJsonModule: true`)      |
  *   – This gives us full IntelliSense & keeps source-of-truth   |
  *     in the Supabase shared folder.                           |
  *--------------------------------------------------------------*/
@@ -57,6 +49,11 @@ export type FlameStatusPayload = ReadonlyDeep<{
   overallProgress: FlameProgressData | null;
   dayDefinition:   FlameDayDefinition | null;
 }>;
+
+export type FlameStatusResponse =
+  | { processing: true }
+  | (ReadonlyDeep<{ processing: false; dataVersion: number }> &
+      FlameStatusPayload);
 
 /*--------------------------------------------------------------*
  | 5 · Default export                                            |

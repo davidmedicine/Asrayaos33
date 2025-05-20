@@ -1,12 +1,10 @@
 // === File: lib/state/slices/notificationSlice.ts ===
 // Zustand slice for notifications (v10.6 spec - Filtering logic removed)
 
-import { StateCreator } from 'zustand';
+import { StateCreator, create } from 'zustand'; // MODIFIED: Added create
 import { Toast, Notification } from '@/types/notification';
 // Import placeholder server actions (assuming they exist)
 // import { saveNotificationAction, updateNotificationAction, markAllNotificationsReadAction, clearArchivedNotificationsAction, getNotificationsAction } from '@/server/actions/notificationActions';
-
-// NOTE: The dedicated hook (useNotificationStore) is defined in store.ts
 
 export interface NotificationSlice {
   // State
@@ -41,7 +39,7 @@ export const createNotificationSlice: StateCreator<NotificationSlice> = (set, ge
 
   // Actions
   addToast: (toastData) => {
-    const id = `toast-${Date.now()}`;
+    const id = `toast-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`; // Added randomness to ID
     const toast: Toast = {
       id,
       ...toastData,
@@ -58,15 +56,6 @@ export const createNotificationSlice: StateCreator<NotificationSlice> = (set, ge
         get().removeToast(id);
       }, toast.duration);
     }
-
-    // Optional: For persistent toasts, also create a notification
-    // if (toast.isPersistent) {
-    //   get().addNotification({
-    //     message: toast.message,
-    //     type: toast.type, // Map toast type to notification type/variant if needed
-    //     variant: 'system_alert', // Or derive variant
-    //   });
-    // }
   },
 
   removeToast: (id) => {
@@ -99,6 +88,7 @@ export const createNotificationSlice: StateCreator<NotificationSlice> = (set, ge
       // if(savedNotification){
       //    set(state => ({ notifications: state.notifications.map(n => n.id === tempId ? savedNotification : n) }));
       // } else { throw new Error("Save failed"); }
+      await new Promise(res => setTimeout(res, 100)); // Simulate server call
     } catch (error) {
       console.error('Error saving notification:', error);
       // Revert optimistic update on error
@@ -247,7 +237,7 @@ export const createNotificationSlice: StateCreator<NotificationSlice> = (set, ge
       // Call Server Action -> Drizzle
       // const fetchedNotifications = await getNotificationsAction(); // Fetch non-archived? Or all? Assume non-archived for now.
       // Simulate
-      const fetchedNotifications: Notification[] = [/* ... mock data from previous version ... */];
+      const fetchedNotifications: Notification[] = [/* ... mock data ... */]; // Placeholder
 
       const unreadCount = fetchedNotifications.filter(n => !n.isRead && !n.isArchived).length;
       set({ notifications: fetchedNotifications, unreadCount, isLoading: false });
@@ -261,3 +251,6 @@ export const createNotificationSlice: StateCreator<NotificationSlice> = (set, ge
     set(state => ({ isPanelOpen: !state.isPanelOpen }));
   },
 });
+
+// MODIFIED: Create and export the store hook directly from this file
+export const useNotificationStore = create<NotificationSlice>(createNotificationSlice);

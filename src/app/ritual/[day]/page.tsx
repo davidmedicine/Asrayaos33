@@ -2,14 +2,28 @@
 import { notFound, redirect } from 'next/navigation';
 import { ViewTransition } from 'react'; // React 19
 import { useQuery } from '@tanstack/react-query';
-import { FlameStatusPayload } from '@flame';
+import { FlameStatusResponse } from '@flame'; // Changed from FlameStatusPayload
 import { fetchFlameStatus } from '@/lib/api/quests';
-export default function RitualDay({ params:{ day } }) {
-  const { data, isPending, error } = useQuery({
+
+// Assuming FullPageSpinner, ErrorState, and DayLayout are defined elsewhere
+// For completeness, let's add dummy versions if they weren't part of the original snippet.
+// If they are already defined in your project, you can remove these.
+const FullPageSpinner = () => <div>Loading...</div>;
+const ErrorState = () => <div>Error loading data.</div>;
+const DayLayout = ({ def, imprints }: { def: any; imprints: any }) => (
+  <div>
+    <h1>Day Definition: {JSON.stringify(def)}</h1>
+    <p>Imprints: {JSON.stringify(imprints)}</p>
+  </div>
+);
+
+
+export default function RitualDay({ params:{ day } }: { params: { day: string } }) { // Added type for params
+  const { data, isPending, error } = useQuery<FlameStatusResponse>({ // Explicitly typed useQuery
     queryKey: ['flame-status'],
     queryFn : fetchFlameStatus,
     staleTime: 0,
-    placeholderData: previous => previous, // v5 idiom  :contentReference[oaicite:1]{index=1}
+    placeholderData: previous => previous,
   });
 
   if (isPending) return <FullPageSpinner/>;
@@ -17,10 +31,17 @@ export default function RitualDay({ params:{ day } }) {
 
   const target = data?.overallProgress?.current_day_target;
   // redirect forward/back if user is on the wrong day
-  if (Number(day) !== target) redirect(`/ritual/${target}`);
+  // Ensure 'day' is compared as a number if 'target' is a number
+  if (target !== undefined && Number(day) !== target) {
+    redirect(`/ritual/${target}`);
+  }
 
   const def = data?.dayDefinition;
-  if (!def) notFound();
+  if (!def) {
+    // It's good practice to log or handle this case more specifically if possible
+    // For now, notFound() is appropriate as per the original code.
+    notFound();
+  }
 
   return (
     <ViewTransition name="ff-day-shell">

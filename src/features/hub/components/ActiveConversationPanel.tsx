@@ -33,10 +33,12 @@ import { useContextStore } from '@/lib/state/slices/contextSlice';
 
 import type { Quest } from '@/types/quest';
 import type { ActiveConversationPanelProps } from './ActiveConversationPanel.types';
-import { FIRST_FLAME_SLUG, type FlameStatusPayload } from '@flame';
+import { FIRST_FLAME_SLUG, type FlameStatusResponse } from '@flame'; // Changed from FlameStatusPayload
 
 import { fetchFlameStatus, invalidateFlameStatus } from '@/lib/api/quests';
 import { getPanelMeta } from '@/lib/core/panelMetaRegistry';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { useNotificationStore } from '@/lib/state/slices/notificationSlice';
 
 const LoadingContextFallback = () => (
   <div className="text-xs text-[var(--text-muted)] italic text-center py-4 animate-pulse">
@@ -77,6 +79,8 @@ const ActiveConversationPanelComponent: React.FC<ActiveConversationPanelProps> =
     (s) => ({ setContext: s.setContext }),
     shallow
   );
+  const addToast = useNotificationStore(state => state.addToast);
+  const processingTimerRef = useRef<NodeJS.Timeout>();
 
   const queryClient = useQueryClient();
 
@@ -84,7 +88,7 @@ const ActiveConversationPanelComponent: React.FC<ActiveConversationPanelProps> =
     (quests ?? []).find((c) => c.id === activeQuestId) || null
   , [quests, activeQuestId]);
 
-  const flameQuery = useQuery<FlameStatusPayload>({
+  const flameQuery = useQuery<FlameStatusResponse>({ // Changed from FlameStatusPayload
     queryKey: ['flameStatus', activeQuestId],
     enabled: Boolean(activeQuestId),
     queryFn: () => fetchFlameStatus(activeQuestId!),
@@ -152,6 +156,19 @@ const ActiveConversationPanelComponent: React.FC<ActiveConversationPanelProps> =
 
   const [uiPhase, setUiPhase] = useState<UIPhase>('oracle_awaiting');
   const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
+
+  useEffect(() => {
+    if (flameQuery.data?.processing) {
+      if (!processingTimerRef.current) {
+        processingTimerRef.current = setTimeout(() => {
+          addToast({ type: 'error', message: 'Processing took too long.' });
+        }, 30_000);
+      }
+    } else if (processingTimerRef.current) {
+      clearTimeout(processingTimerRef.current);
+      processingTimerRef.current = undefined;
+    }
+  }, [flameQuery.data?.processing, addToast]);
 
   useLayoutEffect(() => {
     const canUseNativeVT = typeof document !== 'undefined' && 'startViewTransition' in document;
@@ -229,6 +246,13 @@ const ActiveConversationPanelComponent: React.FC<ActiveConversationPanelProps> =
   , [vercelMessages, activeQuestId, globalActiveAgentId]);
 
   const renderContent = () => {
+    if (flameQuery.data?.processing) {
+      return (
+        <div className="flex flex-col items-center justify-center flex-grow">
+          <LoadingSpinner size="lg" aria-label="Processing" />
+        </div>
+      );
+    }
     if (flameQuery.isLoading && !flameQuery.data && uiPhase === 'oracle_awaiting') return <LoadingContextFallback />;
     const useNativeVT = typeof document !== 'undefined' && 'startViewTransition' in document && devToolsVTEnabled && !prefersReducedMotion;
     const vtStyle: React.CSSProperties = useNativeVT ? { viewTransitionName: `acp-content-area-${activeQuestId || 'none'}` } : {};
@@ -289,7 +313,7 @@ const ActiveConversationPanelComponent: React.FC<ActiveConversationPanelProps> =
       {showDebugInfo && (
         <div className="flex-shrink-0 bg-black/20 p-1.5 text-[10px] leading-tight border-b border-white/10 text-neutral-400 overflow-x-auto whitespace-nowrap space-y-0.5">
           <div><strong>UI:</strong> {uiPhase} | <strong>QID:</strong> {activeQuestId?.slice(-6) ?? 'N'} | <strong>1stQ:</strong> {firstQuestJustCreated?'T':'F'} | <strong>Ag:</strong> {globalActiveAgentId}</div>
-          <div><strong>Flame:</strong> {flameQuery.isLoading?'Load':(flameQuery.error?'Err':'OK')} | <strong>Day:</strong> {flameQuery.data?.dayDefinition?.ritualDay??'N/A'}</div>
+          <div><strong>Flame:</strong> {flameQuery.isLoading?'Load':(flameQuery.error?'Err':(flameQuery.data?.processing ? 'Proc' : 'OK'))} | <strong>Day:</strong> {flameQuery.data?.dayDefinition?.ritualDay??'N/A'}</div>
           <div><strong>Seed:</strong> {activeQuestId && seededChatForQuestRef.current[activeQuestId]?'Y':'N'} | <strong>SDK:</strong> {isSendingMessage?'Load':(chatErrorFromSDK?'Err':'OK')} | <strong>Msgs:</strong> {vercelMessages.length}</div>
           <div><strong>VT:</strong> {devToolsVTEnabled?'On':'Off'} | <strong>RedMot:</strong> {prefersReducedMotion?'On':'Off'}</div>
         </div>

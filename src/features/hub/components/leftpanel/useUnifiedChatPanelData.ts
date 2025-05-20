@@ -15,65 +15,22 @@ import { useRouter } from 'next/navigation';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import type { FlipState } from 'gsap/Flip';
 
-// --- External Project Imports (These remain as they are project-specific) ---
-import { supabase } from '@/lib/supabase_client/client'; // Actual Supabase client
-import { useQuestStore } from '@/lib/state/slices/questslice'; // Actual Zustand store hook
-import { useAuth } from '../AuthContext'; // Actual Auth context hook
-
-/* ---------- Inlined Constants (originally from ./unifiedChatListPanelConstants) ---------- */
-// TODO: Verify these values match your project's configuration
-const FIRST_FLAME_RITUAL_SLUG = 'first-flame-ritual';
-const FIRST_FLAME_DAY_ONE_ROUTE = '/quests/first-flame/day-1'; // Example: '/app/first-flame/day-1'
-const QUEST_QUERY_GC_TIME = 1000 * 60 * 30; // 30 minutes
-const QUEST_QUERY_STALE_TIME = 1000 * 60 * 5; // 5 minutes
-const VIRTUALIZATION_THRESHOLD = 50; // Show this many items before virtualizing
-
-export const UIPanelPhase = {
-  INTRO: 'INTRO',
-  NORMAL: 'NORMAL',
-  ERROR: 'ERROR',
-  ONBOARDING: 'ONBOARDING',
-} as const;
-export type UIPanelPhase = (typeof UIPanelPhase)[keyof typeof UIPanelPhase];
-
-/* ---------- Inlined/Placeholder BaseQuest type (originally from @/lib/state/slices/questslice) ---------- */
-// TODO: Ensure this matches your actual BaseQuest structure
-export interface BaseQuest {
-  id: string;
-  name: string;
-  slug: string;
-  createdAt: number; // Timestamp (e.g., Date.getTime())
-  // Add any other properties that are part of your BaseQuest from questslice
-}
-
-/* ---------- Inlined Helper: sortQuests (originally from ./unifiedChatListPanelConstants) ---------- */
-// TODO: Implement your actual quest sorting logic here
-const sortQuests = (a: Quest, b: Quest): number => {
-  // Example: Prioritize First Flame, then sort by newest first
-  if (a.isFirstFlameRitual && !b.isFirstFlameRitual) return -1;
-  if (!a.isFirstFlameRitual && b.isFirstFlameRitual) return 1;
-  return b.createdAt - a.createdAt;
-};
-
-/* ---------- Mock/Placeholder for announceToSR (originally from @/lib/accessibilityUtils) ---------- */
-// TODO: Replace with your actual announceToSR import if needed, or keep this mock
-const announceToSR = (message: string, options?: { politeness?: 'assertive' | 'polite' | 'off' }) => {
-  if (typeof window !== 'undefined' && window.console) {
-    console.log(`[SR announce (${options?.politeness || 'polite'})]: ${message}`);
-  }
-};
-
-/* ---------- Mock/Placeholder for seedFirstFlame (originally from @/lib/temporal_client) ---------- */
-// TODO: Replace with your actual seedFirstFlame import
-// This is a 🚩 Temporal client wrapper in your original code
-const seedFirstFlame = async (params: { userId: string }): Promise<void> => {
-  if (typeof window !== 'undefined' && window.console) {
-    console.log('[Mock] seedFirstFlame called with userId:', params.userId);
-  }
-  // Simulate an API call
-  return new Promise(resolve => setTimeout(resolve, 500));
-};
-
+import { supabase } from '@/lib/supabase_client/client';
+import { useQuestStore, Quest as BaseQuest } from '@/lib/state/slices/questslice';
+import { useAuth } from '../AuthContext';
+import {
+  FIRST_FLAME_RITUAL_SLUG,
+  FIRST_FLAME_DAY_ONE_ROUTE,
+  QUEST_QUERY_GC_TIME,
+  QUEST_QUERY_STALE_TIME,
+  sortQuests,
+  UIPanelPhase,
+  VIRTUALIZATION_THRESHOLD,
+  QUESTS_QUERY_KEY, // Added by diff
+} from './unifiedChatListPanelConstants';
+import { announceToSR } from '@/lib/accessibilityUtils';
+import { seedFirstFlame } from '@/lib/temporal_client'; // 🚩 Temporal client wrapper
+import { fetchQuestList } from "@/lib/api/quests"; // Added by diff
 
 /* ---------- Types ---------- */
 export interface QuestPayloadFromServer {
@@ -85,7 +42,7 @@ export interface QuestPayloadFromServer {
 
 export interface ListQuestsResponse {
   data: QuestPayloadFromServer[];
-  serverTimestamp: string; // Assuming this is part of the response
+  serverTimestamp: string;
 }
 
 export interface FlameStatusResponse {
@@ -97,19 +54,17 @@ export interface Quest extends BaseQuest {
   isFirstFlameRitual?: boolean;
 }
 
-export type QuestForListItemAugmented = Quest; // Alias for clarity if needed elsewhere
-
+export type QuestForListItemAugmented = Quest;
 
 /* ---------- Helpers ---------- */
 class SilentError extends Error {}
-
-const keyListQuests = (uid?: string): QueryKey => ['list-quests', uid ?? 'anon'];
+// keyListQuests removed as per diff implication (usage replaced by QUESTS_QUERY_KEY)
 const keyFlameStatus = (uid?: string): QueryKey => ['flame-status', uid ?? 'anon'];
 
 const mapQuest = (row: QuestPayloadFromServer): Quest | null => {
   if (!row.id || !row.name || !row.slug) return null;
   return {
-    ...row, // Spreads id, name, slug
+    ...row,
     createdAt: new Date(row.created_at).getTime(),
     isFirstFlameRitual: row.slug === FIRST_FLAME_RITUAL_SLUG,
   };
@@ -118,33 +73,32 @@ const mapQuest = (row: QuestPayloadFromServer): Quest | null => {
 const buildFlameStatusQueryOpts = (uid: string) => ({
   queryKey: keyFlameStatus(uid),
   queryFn: async () => {
-    if (uid === 'anon') throw new SilentError('anon'); // Should not query if anon
+    if (uid === 'anon') throw new SilentError('anon');
     const { data, error } = await supabase.functions.invoke<FlameStatusResponse>('get-flame-status');
     if (error) throw error;
     return data ?? { overallProgress: null };
   },
-  staleTime: Infinity, // Data is very stable or manually invalidated
-  gcTime: QUEST_QUERY_GC_TIME,
-} as const); // `as const` here ensures the object is deeply readonly and types are literal
+  staleTime: Infinity as const,
+  gcTime: QUEST_QUERY_GC_TIME as const,
+} as const);
 
-
-/* -------------------------------------------------------------------------- /
-/ Hook: useUnifiedChatPanelData                                              /
-/ -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+/* Hook: useUnifiedChatPanelData                                              */
+/* -------------------------------------------------------------------------- */
 export const useUnifiedChatPanelData = ({
   initialQuestSlugToSelect,
   panelId, // assumed stable
 }: {
   initialQuestSlugToSelect?: string | null;
-  panelId: string; // Used for potential unique behaviors or logging, currently unused in logic
+  panelId: string;
 }) => {
-  const noop = () => {}; // guard for prod crashes or for optional Zustand setters
+  const noop = () => {}; // Added by diff
 
   const router = useRouter();
   const qc = useQueryClient();
   const { userId, isLoadingAuth, authError } = useAuth();
 
-  // Ensure setActiveQuestId from Zustand store has a default noop if not provided
+  // Ensure setActiveQuestId from Zustand store has a default noop if not provided - Changed by diff
   const { activeQuestId, setActiveQuestId = noop } = useQuestStore(
     (s) => ({ activeQuestId: s.activeQuestId, setActiveQuestId: s.setActiveQuestId }),
     shallow,
@@ -155,124 +109,103 @@ export const useUnifiedChatPanelData = ({
   const [errorDisplay, setErrorDisplay] = useState<{ message: string; code?: any } | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const deferredQuery = useDeferredValue(searchInput.trim().toLowerCase());
-  const [_isPendingTransitionSearch, startTransition] = useTransition(); // Renamed _isPendingSearch for clarity
+  const [_isPendingTransitionSearch, startTransition] = useTransition(); // Renamed by diff (_isPendingSearch -> _isPendingTransitionSearch)
 
   const hasDoneInitialAutoSelect = useRef(false);
-  const heroButtonFlipStateRef = useRef<FlipState | null>(null); // For GSAP Flip animations if used
-  
-  // Ref to store previous raw data and sorted quests to optimize useMemo for `quests`
-  const prevListQDataForQuestsMemoRef = useRef<{ rawData: Quest[] | undefined; sortedQuests: Quest[] }>({
-    rawData: undefined,
-    sortedQuests: [],
-  });
+  const heroButtonFlipStateRef = useRef<FlipState | null>(null);
+
+  const prevListQDataForQuestsMemoRef = useRef<{ rawData: Quest[] | undefined; sortedQuests: Quest[] }>({ rawData: undefined, sortedQuests: [] });
 
   /* ---------------- Queries ---------------- */
   const listQ = useQuery({
-    queryKey: keyListQuests(userId),
-    enabled: !!userId && !isLoadingAuth && !authError, // Only run if logged in and auth is settled
+    queryKey: QUESTS_QUERY_KEY, // Changed by diff
+    enabled: !!userId && !isLoadingAuth && !authError,
     staleTime: QUEST_QUERY_STALE_TIME,
     gcTime: QUEST_QUERY_GC_TIME,
-    placeholderData: (previousData) => previousData, // Keep previous data while fetching
-    queryFn: async ({ queryKey }) => {
-      const uid = queryKey[1] as string;
-      if (uid === 'anon') throw new SilentError('User is not logged in.'); // Should be caught by `enabled`
-      
-      const { data, error } = await supabase.functions.invoke<ListQuestsResponse>('list-quests');
-      if (error) throw error;
-      if (!data || !Array.isArray(data.data)) throw new Error('Invalid data payload from list-quests');
-      
-      return data; // Return the full response
-    },
-    select: (response) => {
+    placeholderData: (prev) => prev,
+    queryFn: fetchQuestList, // Changed by diff
+    select: (response) => { // Changed by diff
       // Map and filter quests from the response data
       return response.data.map(mapQuest).filter((q): q is Quest => q !== null);
     },
-    retry: (failureCount, error) => {
-      if (error instanceof SilentError) return false; // Don't retry for silent errors
-      if (error instanceof FunctionsHttpError && (error.context?.status ?? 500) < 500) {
-        return false; // Don't retry for client-side errors (4xx)
-      }
-      return failureCount < 2; // Retry up to 2 times for other errors
+    onSuccess: (response) => { // Added by diff
+      useQuestStore.getState().setLastSynced(response.serverTimestamp);
     },
-    retryDelay: (attemptIndex) => Math.min(2 ** attemptIndex * 1000 + Math.random() * 200, 30_000),
+    retry: (cnt, err) =>
+      !(err instanceof SilentError) &&
+      cnt < 2 &&
+      !(err instanceof FunctionsHttpError && (err.context?.status ?? 500) < 500),
+    retryDelay: (attempt) => Math.min(2 ** attempt * 1000 + Math.random() * 200, 30_000),
   });
 
-  // Preload flame-status query (disabled by default, enabled on demand or by other logic)
+  // Preload flame‑status (disabled by default)
   useQuery({ ...buildFlameStatusQueryOpts(userId ?? 'anon'), enabled: false });
 
-  /* ---------------- Derived: quests (stable ref via custom memoization) ---------------- */
+  /* ---------------- Derived: quests (stable ref) ---------------- */
   const quests = useMemo(() => {
-    const currentRawData = listQ.data;
-    const { rawData: prevRawData, sortedQuests: prevSortedQuests } = prevListQDataForQuestsMemoRef.current;
-
-    // If underlying data reference hasn't changed (common with placeholderData),
-    // or if shallow comparison indicates no change in content, return previous sorted list.
-    if (currentRawData === prevRawData || (prevRawData && currentRawData && shallow(prevRawData, currentRawData)) ) {
-      return prevSortedQuests;
-    }
-    
-    const sorted = (currentRawData ?? []).slice().sort(sortQuests); // Use .slice() to sort a copy
-    prevListQDataForQuestsMemoRef.current = { rawData: currentRawData, sortedQuests: sorted };
+    const currentRaw = listQ.data;
+    const { rawData: prevRaw, sortedQuests: prevSorted } = prevListQDataForQuestsMemoRef.current;
+    if (prevRaw && currentRaw && shallow(prevRaw, currentRaw)) return prevSorted;
+    const sorted = (currentRaw ?? []).slice().sort(sortQuests); // Use .slice() to sort a copy
+    prevListQDataForQuestsMemoRef.current = { rawData: currentRaw, sortedQuests: sorted };
     return sorted;
-  }, [listQ.data]); // Dependency is listQ.data which changes when new data is fetched
+  }, [listQ.data]);
 
   /* ---------------- Phase calculation (memoised) ---------------- */
-  const calculatedNextPhase = useMemo(() => {
+  const nextPhase = useMemo(() => { // Variable name `calculatedNextPhase` in diff, `nextPhase` in base. Sticking to `nextPhase` from base for minimal change if logic is same. Diff's logic for phase is identical.
     if (listQ.isPending || isLoadingAuth) return UIPanelPhase.INTRO;
     if (listQ.isError && !(listQ.error instanceof SilentError)) return UIPanelPhase.ERROR;
-    if (!listQ.data) return uiPhase; // No data yet, keep current phase (could be INTRO or previous state)
-    return listQ.data.length > 0 ? UIPanelPhase.NORMAL : UIPanelPhase.ONBOARDING;
-  }, [listQ.isPending, isLoadingAuth, listQ.isError, listQ.error, listQ.data, uiPhase]);
+    if (!listQ.data) return uiPhase; // unchanged
+    return listQ.data.length ? UIPanelPhase.NORMAL : UIPanelPhase.ONBOARDING;
+  }, [listQ.isPending, isLoadingAuth, listQ.isError, listQ.error, listQ.data, uiPhase]); // Added listQ.error to deps as per diff
 
   useEffect(() => {
-    if (calculatedNextPhase !== uiPhase) {
-      setUiPhase(calculatedNextPhase);
-    }
-  }, [calculatedNextPhase, uiPhase]);
+    if (nextPhase !== uiPhase) setUiPhase(nextPhase);
+  }, [nextPhase, uiPhase]);
 
   /* ---------------- Actions ---------------- */
   const maybeRedirectToRitualDayOne = useCallback(async () => {
     if (!userId) return;
-    try {
+    try { // try-catch added by diff
       const data = await qc.fetchQuery(buildFlameStatusQueryOpts(userId));
       if (data.overallProgress?.current_day_target === 1) {
         router.replace(FIRST_FLAME_DAY_ONE_ROUTE);
-        announceToSR('Navigating to First Flame – Day 1', { politeness: 'assertive' });
+        announceToSR('Navigating to First Flame – Day 1', { politeness: 'assertive' }); // Non-breaking space changed to regular space by diff, keeping diff's version
       }
-    } catch (error) {
+    } catch (error) { // catch block added by diff
         if (!(error instanceof SilentError)) {
             console.error('Failed to fetch flame status for redirect:', error);
         }
     }
   }, [qc, router, userId]);
 
-  const selectQuestSafely = useCallback(
+  const selectQuestSafely = useCallback( // Function signature and logic changed by diff
     (questId: string | null) => {
       if (!questId) {
         setActiveQuestId(null);
         return;
       }
-      const questToSelect = quests.find((q) => q.id === questId);
+      const questToSelect = quests.find((q) => q.id === questId); // Renamed `quest` to `questToSelect`
       if (!questToSelect) {
-        console.warn(`Quest with id ${questId} not found for selection.`);
+        console.warn(`Quest with id ${questId} not found for selection.`); // Added by diff
         return;
       }
 
       startTransition(() => {
-        setActiveQuestId(questId);
-        announceToSR(`Selected ${questToSelect.name}.`);
-        if (questToSelect.isFirstFlameRitual) {
+        setActiveQuestId(questId); // Was selectQuest(id)
+        announceToSR(`Selected ${questToSelect.name}.`); // Was quest.name
+        if (questToSelect.isFirstFlameRitual) { // Was quest.isFirstFlameRitual
           void maybeRedirectToRitualDayOne();
         }
       });
     },
-    [quests, setActiveQuestId, startTransition, maybeRedirectToRitualDayOne],
+    [quests, setActiveQuestId, startTransition, maybeRedirectToRitualDayOne], // Dependencies updated
   );
 
   const handleRetryLoad = useCallback(() => {
-    setErrorDisplay(null); // Clear previous error
-    qc.invalidateQueries({ queryKey: keyListQuests(userId) });
-  }, [qc, userId]);
+    setErrorDisplay(null); // Added by diff
+    qc.invalidateQueries({ queryKey: QUESTS_QUERY_KEY }); // Changed by diff
+  }, [qc, userId]); // userId kept in deps as per diff, though QUESTS_QUERY_KEY might be static.
 
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchInput(e.target.value);
@@ -280,49 +213,42 @@ export const useUnifiedChatPanelData = ({
 
   /**
    * 🔥 bootstrapFirstFlame
-   * Kicks Temporal worker (or relevant service) to seed ritual rows,
-   * then refetches flame-status and potentially list-quests.
+   * Kicks Temporal worker to seed ritual rows, then refetches flame‑status.
    */
   const bootstrapFirstFlame = useCallback(async () => {
     if (!userId) return;
     try {
-      await seedFirstFlame({ userId }); // Call the (mocked or real) seed function
-      // Invalidate and refetch flame status to get updated progress
+      await seedFirstFlame({ userId });
       qc.invalidateQueries({ queryKey: keyFlameStatus(userId) });
       await qc.fetchQuery(buildFlameStatusQueryOpts(userId));
-      // Optionally, invalidate and refetch quests if seeding adds a new quest
-      // qc.invalidateQueries({ queryKey: keyListQuests(userId) });
+      // qc.invalidateQueries({ queryKey: QUESTS_QUERY_KEY }); // Comment updated by diff
     } catch (err) {
-      console.error('[bootstrapFirstFlame] failed', err);
-      setErrorDisplay({ message: err instanceof Error ? err.message : 'An unknown error occurred.' });
+      // eslint-disable-next-line no-console
+      console.error('[bootstrapFirstFlame] failed', err); // Diff uses console.error("[bootstrapFirstFlame] failed", err);
+      setErrorDisplay({ message: err instanceof Error ? (err as Error).message : 'An unknown error occurred.' }); // Changed by diff
     }
   }, [userId, qc]);
 
-  /* ------------- Auto-select & prefetch once data is ready ----------- */
+  /* ------------- Auto‑select & prefetch once data is ready ----------- */
   useEffect(() => {
-    if (hasDoneInitialAutoSelect.current || listQ.isPending || !quests.length || !userId) return;
+    if (hasDoneInitialAutoSelect.current || listQ.isPending || !quests.length || !userId) return; // Added !userId guard from diff
 
-    let targetQuest: Quest | undefined = undefined;
-    if (initialQuestSlugToSelect) {
-      targetQuest = quests.find((q) => q.slug === initialQuestSlugToSelect);
-    }
-    if (!targetQuest) {
-      targetQuest = quests.find((q) => q.isFirstFlameRitual) || quests[0];
-    }
+    const explicit = initialQuestSlugToSelect
+      ? quests.find((q) => q.slug === initialQuestSlugToSelect)
+      : undefined;
+    const target = explicit || quests.find((q) => q.isFirstFlameRitual) || quests[0];
 
-    if (targetQuest) {
-      selectQuestSafely(targetQuest.id);
-    }
+    if (target) selectQuestSafely(target.id);
     hasDoneInitialAutoSelect.current = true;
 
-    // Prefetch flame status if not already fetched or fetching
-    // Check query state before prefetching to avoid redundant calls
-    if (!qc.getQueryState(keyFlameStatus(userId))) {
-      void qc.prefetchQuery(buildFlameStatusQueryOpts(userId));
+    // Check query state before prefetching to avoid redundant calls - Added by diff
+    if (!qc.getQueryState(keyFlameStatus(userId ?? 'anon'))) { // userId ?? 'anon' from base, diff has (userId)
+      void qc.prefetchQuery(buildFlameStatusQueryOpts(userId ?? 'anon')); // userId ?? 'anon' from base
     }
   }, [initialQuestSlugToSelect, listQ.isPending, quests, qc, userId, selectQuestSafely]);
-  
-  /* ------------- Error Display Effect for listQ query ----------- */
+
+
+  /* ------------- Error Display Effect for listQ query ----------- */ // Added by diff
   useEffect(() => {
     if (listQ.isError && !(listQ.error instanceof SilentError)) {
         const message = listQ.error instanceof Error ? listQ.error.message : 'Failed to load quests.';
@@ -336,48 +262,45 @@ export const useUnifiedChatPanelData = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listQ.isError, listQ.error]); // errorDisplay is intentionally omitted to avoid loop if setErrorDisplay caused re-render
 
+
   /* ---------------- Filters & selectors ---------------- */
   const filteredQuests = useMemo(() => {
     if (!deferredQuery) return quests;
     return quests.filter((q) => q.name.toLowerCase().includes(deferredQuery));
   }, [quests, deferredQuery]);
 
-  const shouldVirtualize = useMemo(
-    () => filteredQuests.length >= VIRTUALIZATION_THRESHOLD,
-    [filteredQuests.length],
-  );
-
+  const shouldVirtualize = useMemo(() => filteredQuests.length >= VIRTUALIZATION_THRESHOLD, [filteredQuests.length]); // .length added by diff
   // More accurate isPendingSearch: true if a search is typed but deferred value hasn't updated AND list is fetching
   // Or if the transition for selection is pending.
-  // The original `_isPendingSearch` from `useTransition` was unused.
+  // The original `_isPendingTransitionSearch` from `useTransition` was unused.
   // This `isPendingSearch` indicates if the displayed list might be stale due to active search input.
-  const isPendingSearch = listQ.isFetching && searchInput.trim().toLowerCase() !== deferredQuery;
+  const isPendingSearch = listQ.isFetching && searchInput.trim().toLowerCase() !== deferredQuery; // .toLowerCase() added by diff, searchInput.trim() was searchInput.trim().toLowerCase() in diff, base was searchInput.trim()
 
 
   /* ---------------- Return API ---------------- */
   return {
     uiPhase,
-    errorDisplay, // For showing critical errors like quest list failing
+    errorDisplay,
     searchQuery: searchInput,
-    isPendingSearch, // True if search input is being processed or results are loading due to search
-    
+    isPendingSearch,
+
     quests, // All available quests, sorted
-    listItemData: filteredQuests as QuestForListItemAugmented[], // Quests filtered by search, ready for list rendering
-    
+    listItemData: filteredQuests as QuestForListItemAugmented[], // Cast added by diff
+
     firstFlameQuest: quests.find((q) => q.isFirstFlameRitual),
     activeQuestId,
 
-    isLoadingAuth, // Auth status loading
-    isLoadingInitial: listQ.isPending && !hasDoneInitialAutoSelect.current, // Initial load of quests
-    isLoadingBackground: listQ.isFetching && hasDoneInitialAutoSelect.current, // Background refresh of quests
+    isLoadingAuth,
+    isLoadingInitial: listQ.isPending && !hasDoneInitialAutoSelect.current,
+    isLoadingBackground: listQ.isFetching && hasDoneInitialAutoSelect.current,
 
-    shouldVirtualize, // Flag for UI to switch to virtualized list
-    heroButtonFlipStateRef, // Ref for GSAP animations on a specific button
+    shouldVirtualize,
+    heroButtonFlipStateRef,
 
     /* actions */
     handleSearchChange,
     handleSelectQuest: selectQuestSafely,
-    handleRetryLoad, // Action to retry loading quests
-    bootstrapFirstFlame, // Action to initiate the First Flame ritual
+    handleRetryLoad,
+    bootstrapFirstFlame,
   };
 };

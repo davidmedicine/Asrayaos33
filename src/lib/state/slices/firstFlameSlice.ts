@@ -1,16 +1,16 @@
 /**
- * @file src/lib/state/slices/firstFlame/firstFlameSlice.ts
- * @description Zustand slice for managing the First Flame quest state.
- * This slice handles imprints, progress, and interactions with the server for the First Flame quest.
- * It is designed to be lean, type-safe, predictable, SSR-safe, and offline-capable.
- *
- * For SSR and hydration, this slice uses a versioning mechanism. Data fetched (e.g., by a React Query hook)
- * should be passed to the `_hydrateFromServer` action along with a `dataVersion` timestamp.
- * The slice will only update if the incoming `dataVersion` is newer than its current `version`.
- * This prevents redundant updates and aligns with best practices for data hydration.
- * @see {@link https://tkdodo.eu/blog/placeholder-and-initial-data-in-react-query | TkDodo on Placeholder vs. Initial Data}
- * @see {@link https://supabase.com/docs/guides/auth/row-level-security | Supabase RLS Guide} (for RLS error context)
- */
+* @file src/lib/state/slices/firstFlame/firstFlameSlice.ts
+* @description Zustand slice for managing the First Flame quest state.
+* This slice handles imprints, progress, and interactions with the server for the First Flame quest.
+* It is designed to be lean, type-safe, predictable, SSR-safe, and offline-capable.
+*
+* For SSR and hydration, this slice uses a versioning mechanism. Data fetched (e.g., by a React Query hook)
+* should be passed to the `_hydrateFromServer` action along with a `dataVersion` timestamp.
+* The slice will only update if the incoming `dataVersion` is newer than its current `version`.
+* This prevents redundant updates and aligns with best practices for data hydration.
+* @see {@link https://tkdodo.eu/blog/placeholder-and-initial-data-in-react-query | TkDodo on Placeholder vs. Initial Data}
+* @see {@link https://supabase.com/docs/guides/auth/row-level-security | Supabase RLS Guide} (for RLS error context)
+*/
 import { StateCreator } from 'zustand';
 import { FunctionsHttpError, FunctionsRelayError, FunctionsFetchError } from '@supabase/supabase-js';
 
@@ -98,6 +98,7 @@ export interface FirstFlameState {
   initiationStatus: 'idle' | 'loading' | 'success' | 'error';
   submitStatus: 'idle' | 'submitting' | 'success' | 'error' | 'queued';
   lastError: SliceError | null;
+  hasBootstrapped: boolean;
 }
 
 export interface FirstFlameOptimisticActions {
@@ -125,6 +126,7 @@ export interface FirstFlameActions {
   clearError: () => void;
   prepareToStartFirstFlame: () => Promise<StartFirstFlameResponsePayload | null>;
   submitImprint: (args: SubmitImprintArgs) => Promise<boolean>; // Returns true on successful handoff (synced or queued)
+  ensureBootstrapped: () => Promise<void>;
   optimistic: FirstFlameOptimisticActions;
   resetFirstFlameSlice: () => void;
 }
@@ -140,6 +142,7 @@ const initialFirstFlameState: FirstFlameState = {
   initiationStatus: 'idle',
   submitStatus: 'idle',
   lastError: null,
+  hasBootstrapped: false,
 };
 
 // --- Helper Functions ---
@@ -330,6 +333,53 @@ export const createFirstFlameSlice: StateCreator<
     }
   },
 
+  ensureBootstrapped: async () => {
+    if (get().hasBootstrapped) return;
+    const delayFor = (attempt: number) =>
+      Math.min(2 ** attempt * 1000 + Math.random() * 200, 30_000);
+
+    let attempt = 0;
+    let status: any = await flameApi.fetchFlameStatus();
+    while (status?.processing && attempt < 3) {
+      await new Promise(res => setTimeout(res, delayFor(attempt)));
+      attempt += 1;
+      status = await flameApi.fetchFlameStatus();
+    }
+
+    if (!status?.processing) {
+      try {
+        get()._hydrateFromServer(status);
+      } catch (e) {
+        /* ignore hydrate errors */
+      }
+
+      const def = status.dayDefinition;
+      if (def) {
+        const parts: string[] = [];
+        if (Array.isArray(def.narrativeOpening) && def.narrativeOpening.length)
+          parts.push(...def.narrativeOpening);
+        if (def.oracleGuidance?.interactionPrompt)
+          parts.push(def.oracleGuidance.interactionPrompt);
+        const content = parts.join('\n\n').trim();
+        if (content) {
+          get().setMessages(FIRST_FLAME_QUEST_ID, [
+            {
+              id: `sys-seed-${Date.now()}`,
+              role: 'system',
+              content,
+              createdAt: new Date(),
+            },
+          ]);
+        }
+      }
+
+      set(state => ({ ...state, hasBootstrapped: true }));
+      if (get().setFirstQuestJustCreated) {
+        get().setFirstQuestJustCreated(true);
+      }
+    }
+  },
+
   optimistic: {
     _addImprint: (imprintData) => {
       const nowMs = Date.now();
@@ -474,3 +524,4 @@ export const selectInitiationStatus = (state: AppState): FirstFlameState['initia
 export const selectLastError = (state: AppState): SliceError | null => state.firstFlame.lastError;
 export const selectLatestInitiationData = (state: AppState): StartFirstFlameResponsePayload | null => state.firstFlame.latestInitiationData;
 export const selectDataVersion = (state: AppState): number => state.firstFlame.version;
+export const selectHasBootstrapped = (state: AppState): boolean => state.firstFlame.hasBootstrapped;
