@@ -576,7 +576,7 @@ export async function fetchFlameStatus(): Promise<FlameStatusPayload> {
 
 
   if (serverResponse.processing) {
-    throw new ProcessingError('Flame status is still processing on the server.');
+    throw new ProcessingError();
   }
 
   if (
@@ -713,6 +713,8 @@ export const defaultFlameStatusQueryOptions: UseQueryOptions<
   queryKey: FLAME_STATUS_BASE_QUERY_KEY, // Non-user-specific key
   queryFn: fetchFlameStatus,
   staleTime: 1000 * 60 * 5, // 5 minutes; adjust based on expected data volatility
+  retry: (n, err) => (err as any)?.processing === true && n < 5,
+  retryDelay: attempt => Math.min(1000 * 2 ** attempt, 10000),
 };
 
 /**
