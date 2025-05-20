@@ -276,19 +276,22 @@ export const useUnifiedChatPanelData = ({
   }, [initialQuestSlugToSelect, listQ.isPending, quests, qc, userId, selectQuestSafely]);
 
 
-  /* ------------- Error Display Effect for listQ query ----------- */ // Added by diff
+  /* ------------- Error Display Effect for listQ query ----------- */
   useEffect(() => {
     if (listQ.isError && !(listQ.error instanceof SilentError)) {
-        const message = listQ.error instanceof Error ? listQ.error.message : 'Failed to load quests.';
-        const code = listQ.error instanceof FunctionsHttpError ? listQ.error.context?.status : undefined;
-        setErrorDisplay({ message, code });
+      const message =
+        listQ.error instanceof Error ? listQ.error.message : 'Failed to load quests.';
+      const code =
+        listQ.error instanceof FunctionsHttpError ? listQ.error.context?.status : undefined;
+      setErrorDisplay((prev) =>
+        prev?.message !== message || prev?.code !== code ? { message, code } : prev,
+      );
     } else if (!listQ.isError && errorDisplay) {
-        // Clear error if query is no longer in error state (e.g. after successful retry)
-        // but only if the current errorDisplay is related to listQ (this is a simplification)
-        setErrorDisplay(null);
+      // Clear error if query is no longer in error state (e.g. after successful retry)
+      // but only if the current errorDisplay is related to listQ (this is a simplification)
+      setErrorDisplay(null);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listQ.isError, listQ.error]); // errorDisplay is intentionally omitted to avoid loop if setErrorDisplay caused re-render
+  }, [listQ.isError, listQ.error, errorDisplay]);
 
 
   /* ---------------- Filters & selectors ---------------- */
