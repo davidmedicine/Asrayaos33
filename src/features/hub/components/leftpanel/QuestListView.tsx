@@ -401,7 +401,7 @@ import { shallow } from 'zustand/shallow';
             ) : (
               // --- Static List ---
               <div className="p-1 space-y-px">
-                {listItemData.map((questItem, index) => {
+                {listItemData?.map((questItem, index) => {
                   const isActive = activeQuestId === questItem.id;
                   const isFocusedByKeyboard = activeDescendantIndex === index; // For visual keyboard focus indication
                   const questListItemId = `${panelId}-quest-item-${questItem.id}`;
