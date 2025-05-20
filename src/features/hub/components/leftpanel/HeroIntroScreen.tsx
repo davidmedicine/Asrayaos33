@@ -97,6 +97,7 @@ const HeroIntroScreenComp: React.FC<Props> = (props) => {
       btn.removeEventListener('mouseleave', leave);
       btn.removeEventListener('focus', enter);
       btn.removeEventListener('blur',  leave);
+      tl.revert();
       tl.kill();
     };
   }, [prefersReduced, heroButtonRef]);
