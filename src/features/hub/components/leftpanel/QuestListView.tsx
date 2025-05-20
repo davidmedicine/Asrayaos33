@@ -9,6 +9,7 @@ import React, {
     useMemo,
     useLayoutEffect,
   } from 'react';
+import { shallow } from 'zustand/shallow';
   import { FixedSizeList, ListChildComponentProps } from 'react-window';
   import AutoSizer from 'react-virtualized-auto-sizer';
   import { SearchIcon, FlameIcon, PlusCircleIcon } from 'lucide-react'; // Added PlusCircleIcon
@@ -154,6 +155,8 @@ import React, {
   }) => {
     const listContainerRef = useRef<HTMLDivElement>(null); // For the listbox container
     const fixedListRef = useRef<FixedSizeList>(null); // For react-window API
+
+    const listItemDataRef = useRef(listItemData);
   
     // State for managing the ARIA active descendant (keyboard focus)
     const [activeDescendantIndex, setActiveDescendantIndex] = useState<number>(-1);
@@ -174,18 +177,22 @@ import React, {
   
     // --- Effect to Sync Active Descendant with External Active Quest ID ---
     useEffect(() => {
-      const currentGlobalActiveIndex = activeQuestId
-        ? listItemData.findIndex((item) => item.id === activeQuestId)
+      const prevData = listItemDataRef.current;
+      if (prevData !== listItemData && !shallow(prevData, listItemData)) {
+        listItemDataRef.current = listItemData;
+      }
+
+      const currentIndex = activeQuestId
+        ? listItemDataRef.current.findIndex((item) => item.id === activeQuestId)
         : -1;
-  
-      if (currentGlobalActiveIndex !== activeDescendantIndex) {
-        setActiveDescendantIndex(currentGlobalActiveIndex);
-        // Scroll to the newly active item if list is already mounted and visible
-        if (hasMounted.current && currentGlobalActiveIndex !== -1 && fixedListRef.current) {
-          fixedListRef.current.scrollToItem(currentGlobalActiveIndex, 'smart');
+
+      if (currentIndex !== activeDescendantIndex) {
+        setActiveDescendantIndex(currentIndex);
+        if (hasMounted.current && currentIndex !== -1 && fixedListRef.current) {
+          fixedListRef.current.scrollToItem(currentIndex, 'smart');
         }
       }
-    }, [activeQuestId, listItemData, activeDescendantIndex]); // Removed fixedListRef from deps
+    }, [activeQuestId, listItemData, activeDescendantIndex]);
   
     // --- Effect to Scroll to Keyboard-Focused Item ---
     useLayoutEffect(() => {
