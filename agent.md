@@ -1,61 +1,112 @@
-Context (do not modify):
-• Next 15 (App Router) · React 19 · Zustand · TanStack Query v5
-• Supabase Edge Functions (list-quests, get-flame-status) now return wrapped payloads:
-{ data: <rows>, serverTimestamp: <ISO> } and { processing | dataVersion | … } respectively.
-• UI error “Failed to Load Quests → Unknown error” appears even though Network tab shows HTTP 200.
-• Root cause: front-end helpers still expect a bare array/object instead of the new wrapper.
+System instructions (keep at top)
 
-🔧 Primary Objectives
-Fix the contract mismatch between Edge Functions and src/lib/api/quests.ts:
+You are working inside the repo asrayaos8.4 (monorepo root: /Users/davebentley/Documents/Asrayaos16.4).
 
-fetchQuestList must unwrap res.data and surface res.error (if present) before returning.
+All changes must compile with pnpm dev and pass pnpm lint && pnpm typecheck.
 
-fetchFlameStatus must tolerate { processing: true } → 202 and only set slice data when processing === false.
+Never introduce breaking API changes to public exports unless explicitly asked.
 
-Ensure Day-1 (“first-flame-ritual”) quest auto-boots for a brand-new user and its messages hydrate
-ActiveConversationPanel + ChatContextPanel.
+Follow project conventions: camelCase for hooks, PascalCase for components, snake_case for SQL/edge-fn identifiers.
 
-Remove the phantom “Unknown error.”—UI should display the actual error string returned by the function wrapper.
+When you touch React files, ensure they remain React 18 / Next-13 app-router compatible ("use client" where needed).
 
-Keep query keys, stale/GC times, and slice hydration in sync with unifiedChatListPanelConstants.ts.
+➊ Fix the Maximum-Update-Depth loop in useUnifiedChatPanelData.ts
+Bug: Console shows “Maximum update depth exceeded” originating at line 256 of useUnifiedChatPanelData.ts; causes React 18 render storm. This is classic setState→re-render→useEffect loop. 
+Stack Overflow
+Stack Overflow
 
-Preserve optimistic pin/unpin & LRU logic already present in questSlice.
+Root cause: The useEffect that syncs activeDescendantIndex relies on listItemData, which itself is derived from the very state mutated inside the effect; deps list is missing a stable ref or equality guard. 
+Stack Overflow
 
-🛠️ Worklist for the Agent
-#	File / Area	Required Action
-1	src/lib/api/quests.ts	• Replace every invoke<T>('list-quests') call with logic that:
-a) const res = await invoke<{ data: QuestPayloadFromServer[]; serverTimestamp: string }>(...)
-b) If res?.error → throw new Error(res.error)
-c) Return res.data.map(q ⇒ ({ …q, isFirstFlameRitual: q.slug === FIRST_FLAME_SLUG })).
-• In fetchFlameStatus return early with { processing: true } so the slice can show a spinner instead of an error.
-2	src/features/hub/components/leftpanel/useUnifiedChatPanelData.ts	• Update the useQuery(['quests'], fetchQuestList …) success handler to write serverTimestamp → questSlice.lastSynced.
-3	src/lib/state/slices/firstFlameSlice.ts	• Inside ensureBootstrapped() call the new fetchFlameStatus. When it resolves with { processing: false } seed day-1 messages and set hasBootstrapped = true.
-4	src/features/hub/components/ActiveConversationPanel.tsx	• useFlameBroadcast → on 'ready' event invalidate both ['flame-status'] and ['quests'] so the list order updates after day change.
-5	src/features/hub/components/UnifiedChatListPanel.tsx	• Replace hard-coded string “Unknown error.” with errorDisplay?.message ?? 'Unexpected client error.'.
-6	src/lib/api/quests.ts	• Add a narrow overload to invoke() that automatically infers GET when options.method is omitted and no body is provided—this prevents accidental POSTs that the Edge runtime blocks.
-7	Audit	• Grep repo for list-quests and ensure every call site handles the { data, serverTimestamp } wrapper.
-8	Tests	• Add jest / vitest unit for fetchQuestList that stubs the wrapped response and asserts correct array return.
-9	Storybook	• Update the QuestList error story: feed { error: 'DB' } from MSW and confirm UI shows “Database error.” not “Unknown error.”
+Fix:
 
-🗂️ Directories the Agent MUST Scan
-swift
+Wrap expensive arrays with useRef + shallow‐compare before calling setActiveDescendantIndex.
+
+Add strict dependency arrays (React docs: never omit when you call setState inside effect). 
+Stack Overflow
+
+Guard setState calls so they only fire when new value !== old (use === / shallow-equality).
+
+➋ Guard against undefined.map in Quest list
+Bug: “Cannot read properties of undefined (reading 'map')” when listItemData hasn’t arrived yet. 
+Reddit
+
+Fix:
+
+Always default to an empty array:
+
+ts
 Copy
 Edit
-asrayaos8.4/src/features/hub/components/leftpanel
-asrayaos8.4/src/features/hub/components/ActiveConversationPanel.tsx
-asrayaos8.4/src/features/hub/components/ChatContextPanel.tsx
-asrayaos8.4/src/lib/api/quests.ts
-asrayaos8.4/src/lib/state/slices/firstFlameSlice.ts
-asrayaos8.4/src/lib/state/slices/questslice.ts
-asrayaos8.4/supabase/functions/list-quests/*
-asrayaos8.4/supabase/functions/get-flame-status/*
-✅ Definition of Done
-Loading /hub on a fresh profile auto-shows Day-1 quest and messages.
+const listItemData = filteredQuests ?? [];
+In TSX, replace listItemData.map with optional chaining listItemData?.map for extra safety.
 
-“Failed to Load Quests” panel now surfaces exact backend error codes (AUTH, DB, STORAGE, etc.).
+➌ Stop the search-input ↔ deferredQuery ping-pong
+isPendingSearch becomes true on every keystroke and retriggers the same useEffect, feeding the depth loop.
 
-Subsequent visits rehydrate quest list within QUEST_QUERY_STALE_TIME (5 min) and never flash the intro spinner unnecessarily.
+Memoise deferredQuery with useDeferredValue once, then in the effect compare with a useRef(prev) to detect real change.
 
-Live flame-status Broadcast updates reorder the quest list in real time without manual refresh.
+Alternatively keep a single source of truth (searchInput) and compute filteredQuests inside useMemo, no extra state needed. 
+GitHub
 
-All TypeScript types compile with strict: true.
+➍ Patch the Edge Functions
+A. /functions/list-quests
+You already added the correct JSON Content-Type; keep that.
+
+Make sure return json(responseBody) is executed for both GET and POST paths.
+
+B. /functions/get-flame-status
+Browser shows 500: confirm bucket/key exist (asrayaospublicbucket/5-day/day-1.json) and that storage permissions allow anon read. 
+Stack Overflow
+
+Add console.error around each Supabase call (flame_progress, flame_imprints, Storage download) so logs surface in the Supabase dashboard.
+
+Ensure the function always ends with return json({ processing:true },202) when progress row missing; right now early return may be skipped, leaving the request hanging.
+
+➎ Notification slice import mismatch
+Import path in store.ts uses notificationSlice but file is notificationslice.ts (lower-case s).
+
+Rename the file to notificationSlice.ts (capital S) or change all imports to the lower-case version.
+
+Export both createNotificationSlice and useNotificationStore.
+
+➏ Stabilise useQuestStore.setActiveQuestId
+Provide a no-op fallback only in tests; in production always require the function.
+
+Add runtime check: if (typeof setActiveQuestId !== 'function') throw new Error(...).
+
+➐ Auto-bootstrap Day 1 after First-Flame CTA
+After bootstrapFirstFlame resolves, prefetch the day-1 definition via get-flame-status (already cached in React-Query).
+
+In the callback, set activeQuestId to the First-Flame quest only once (hasDoneInitialAutoSelect ref).
+
+Trigger navigation:
+
+ts
+Copy
+Edit
+router.replace(AppRoutes.RitualDayOne);
+➑ Unit & integration tests
+Add Jest tests for useUnifiedChatPanelData ensuring no state updates fire when dependencies unchanged.
+
+Create Cypress flow: login fresh user → click “Begin ritual” CTA → expect URL /first-flame/day-1 → panels render without errors.
+
+➒ Dev-tools: flip-state cleanup
+In HeroIntroScreen the GSAP hover timeline leaks on fast page swaps. Add tl.revert() on cleanup or wrap timeline in context() API. 
+Reddit
+
+➓ Runbook for the AI
+Search-and-replace: useEffect( blocks without full deps list.
+
+Refactor the 5 hotspots called out above.
+
+Run pnpm dev & watch console - zero red lines.
+
+Commit with message:
+
+pgsql
+Copy
+Edit
+fix(quests): stop infinite render loops & load Day-1 context on first login
+
+
