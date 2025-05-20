@@ -108,7 +108,7 @@ export const useUnifiedChatPanelData = ({
   const [uiPhase, setUiPhase] = useState<UIPanelPhase>(UIPanelPhase.INTRO);
   const [errorDisplay, setErrorDisplay] = useState<{ message: string; code?: any } | null>(null);
   const [searchInput, setSearchInput] = useState('');
-  const deferredQuery = useDeferredValue(searchInput.trim().toLowerCase());
+  const deferredSearchInput = useDeferredValue(searchInput);
   const [_isPendingTransitionSearch, startTransition] = useTransition(); // Renamed by diff (_isPendingSearch -> _isPendingTransitionSearch)
 
   const hasDoneInitialAutoSelect = useRef(false);
@@ -265,16 +265,19 @@ export const useUnifiedChatPanelData = ({
 
   /* ---------------- Filters & selectors ---------------- */
   const filteredQuests = useMemo(() => {
-    if (!deferredQuery) return quests;
-    return quests.filter((q) => q.name.toLowerCase().includes(deferredQuery));
-  }, [quests, deferredQuery]);
+    const query = searchInput.trim().toLowerCase();
+    if (!query) return quests;
+    return quests.filter((q) => q.name.toLowerCase().includes(query));
+  }, [quests, searchInput]);
 
   const shouldVirtualize = useMemo(() => filteredQuests.length >= VIRTUALIZATION_THRESHOLD, [filteredQuests.length]); // .length added by diff
   // More accurate isPendingSearch: true if a search is typed but deferred value hasn't updated AND list is fetching
   // Or if the transition for selection is pending.
   // The original `_isPendingTransitionSearch` from `useTransition` was unused.
   // This `isPendingSearch` indicates if the displayed list might be stale due to active search input.
-  const isPendingSearch = listQ.isFetching && searchInput.trim().toLowerCase() !== deferredQuery; // .toLowerCase() added by diff, searchInput.trim() was searchInput.trim().toLowerCase() in diff, base was searchInput.trim()
+  const isPendingSearch =
+    listQ.isFetching &&
+    searchInput.trim().toLowerCase() !== deferredSearchInput.trim().toLowerCase();
 
 
   /* ---------------- Return API ---------------- */
