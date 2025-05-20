@@ -212,6 +212,24 @@ export const useUnifiedChatPanelData = ({
   }, []);
 
   /**
+   * 🔥 bootstrapFirstFlame
+   * Kicks Temporal worker to seed ritual rows, then refetches flame‑status.
+   */
+  const bootstrapFirstFlame = useCallback(async () => {
+    if (!userId) return;
+    try {
+      await seedFirstFlame({ userId });
+      qc.invalidateQueries({ queryKey: keyFlameStatus(userId) });
+      await qc.fetchQuery(buildFlameStatusQueryOpts(userId));
+      // qc.invalidateQueries({ queryKey: QUESTS_QUERY_KEY }); // Comment updated by diff
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[bootstrapFirstFlame] failed', err); // Diff uses console.error("[bootstrapFirstFlame] failed", err);
+      setErrorDisplay({ message: err instanceof Error ? (err as Error).message : 'An unknown error occurred.' }); // Changed by diff
+    }
+  }, [userId, qc]);
+
+  /**
    * Called after the user hits the First‑Flame CTA. Boots the ritual on the
    * backend, prefetches Day 1 data and navigates to the ritual screen once
    * ready.
@@ -238,24 +256,6 @@ export const useUnifiedChatPanelData = ({
 
     router.replace(AppRoutes.RitualDayOne);
   }, [bootstrapFirstFlame, userId, qc, quests, selectQuestSafely, router]);
-
-  /**
-   * 🔥 bootstrapFirstFlame
-   * Kicks Temporal worker to seed ritual rows, then refetches flame‑status.
-   */
-  const bootstrapFirstFlame = useCallback(async () => {
-    if (!userId) return;
-    try {
-      await seedFirstFlame({ userId });
-      qc.invalidateQueries({ queryKey: keyFlameStatus(userId) });
-      await qc.fetchQuery(buildFlameStatusQueryOpts(userId));
-      // qc.invalidateQueries({ queryKey: QUESTS_QUERY_KEY }); // Comment updated by diff
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[bootstrapFirstFlame] failed', err); // Diff uses console.error("[bootstrapFirstFlame] failed", err);
-      setErrorDisplay({ message: err instanceof Error ? (err as Error).message : 'An unknown error occurred.' }); // Changed by diff
-    }
-  }, [userId, qc]);
 
   /* ------------- Auto‑select & prefetch once data is ready ----------- */
   useEffect(() => {
