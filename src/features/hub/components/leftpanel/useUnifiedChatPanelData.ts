@@ -118,18 +118,18 @@ export const useUnifiedChatPanelData = ({
 
   /* ---------------- Queries ---------------- */
   const listQ = useQuery({
-    queryKey: QUESTS_QUERY_KEY, // Changed by diff
+    queryKey: QUESTS_QUERY_KEY,
     enabled: !!userId && !isLoadingAuth && !authError,
     staleTime: QUEST_QUERY_STALE_TIME,
     gcTime: QUEST_QUERY_GC_TIME,
     placeholderData: (prev) => prev,
-    queryFn: fetchQuestList, // Changed by diff
-    select: (response) => { // Changed by diff
-      // Map and filter quests from the response data
-      return response.data.map(mapQuest).filter((q): q is Quest => q !== null);
-    },
-    onSuccess: (response) => { // Added by diff
-      useQuestStore.getState().setLastSynced(response.serverTimestamp);
+    queryFn: fetchQuestList,
+    select: (res: ListQuestsResponse) => ({
+      quests: res.data.map(mapQuest).filter((q): q is Quest => Boolean(q)),
+      serverTimestamp: res.serverTimestamp,
+    }),
+    onSuccess: (data) => {
+      useQuestStore.getState().setLastSynced(Date.parse(data.serverTimestamp));
     },
     retry: (cnt, err) =>
       !(err instanceof SilentError) &&
@@ -143,21 +143,31 @@ export const useUnifiedChatPanelData = ({
 
   /* ---------------- Derived: quests (stable ref) ---------------- */
   const quests = useMemo(() => {
-    const currentRaw = listQ.data;
-    const { rawData: prevRaw, sortedQuests: prevSorted } = prevListQDataForQuestsMemoRef.current;
+    const currentRaw = listQ.data?.quests;
+    const { rawData: prevRaw, sortedQuests: prevSorted } =
+      prevListQDataForQuestsMemoRef.current;
     if (prevRaw && currentRaw && shallow(prevRaw, currentRaw)) return prevSorted;
-    const sorted = (currentRaw ?? []).slice().sort(sortQuests); // Use .slice() to sort a copy
+    const sorted = (currentRaw ?? []).slice().sort(sortQuests);
     prevListQDataForQuestsMemoRef.current = { rawData: currentRaw, sortedQuests: sorted };
     return sorted;
-  }, [listQ.data]);
+  }, [listQ.data?.quests]);
 
   /* ---------------- Phase calculation (memoised) ---------------- */
   const nextPhase = useMemo(() => { // Variable name `calculatedNextPhase` in diff, `nextPhase` in base. Sticking to `nextPhase` from base for minimal change if logic is same. Diff's logic for phase is identical.
     if (listQ.isPending || isLoadingAuth) return UIPanelPhase.INTRO;
     if (listQ.isError && !(listQ.error instanceof SilentError)) return UIPanelPhase.ERROR;
-    if (!listQ.data) return uiPhase; // unchanged
-    return listQ.data.length ? UIPanelPhase.NORMAL : UIPanelPhase.ONBOARDING;
-  }, [listQ.isPending, isLoadingAuth, listQ.isError, listQ.error, listQ.data, uiPhase]); // Added listQ.error to deps as per diff
+    if (!listQ.data?.quests) return uiPhase;
+    return listQ.data.quests.length
+      ? UIPanelPhase.NORMAL
+      : UIPanelPhase.ONBOARDING;
+  }, [
+    listQ.isPending,
+    isLoadingAuth,
+    listQ.isError,
+    listQ.error,
+    listQ.data?.quests,
+    uiPhase,
+  ]);
 
   useEffect(() => {
     if (nextPhase !== uiPhase) setUiPhase(nextPhase);
