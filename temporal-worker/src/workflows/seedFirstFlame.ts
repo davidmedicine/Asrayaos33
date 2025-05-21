@@ -1,6 +1,7 @@
 // src/workflows/seedFirstFlame.ts
 import * as wf from '@temporalio/workflow';
 import type * as act from '../activities';         // adjust the path if your activities live elsewhere
+import { FIRST_FLAME_QUEST_ID } from '../../src/lib/shared/firstFlame';
 
 /** -------- Types -------- */
 export interface SeedFirstFlameInput {
@@ -11,6 +12,13 @@ export interface SeedFirstFlameInput {
 export const seedFirstFlameSignal = wf.defineSignal<[SeedFirstFlameInput]>(
   'seedFirstFlame',
 );
+
+function getFirstFlameQuestId(): string {
+  // In this simplified worker environment the First‑Flame quest UUID is
+  // bundled at build time alongside the front-end constant.
+  // In production this could query Supabase or another service.
+  return FIRST_FLAME_QUEST_ID;
+}
 
 /** -------- Activity proxies --------
  *  • `ensureFlameState`    – creates / validates DB rows in Supabase
@@ -29,12 +37,14 @@ const { ensureFlameState, insertDayOneMessages, broadcastReady } = wf.proxyActiv
 export async function seedFirstFlame(
   input: SeedFirstFlameInput,
 ): Promise<void> {
+  const questId = getFirstFlameQuestId();
+
   // 1) Guarantee quest-state exists
-  await ensureFlameState(input.userId);
+  await ensureFlameState({ userId: input.userId, questId });
 
   // 2) Insert Day‑1 system + prompt messages
-  await insertDayOneMessages(input.userId);
+  await insertDayOneMessages({ userId: input.userId, questId });
 
   // 3) Tell the front-end it can refetch
-  await broadcastReady(input.userId);
+  await broadcastReady({ userId: input.userId, questId });
 }
