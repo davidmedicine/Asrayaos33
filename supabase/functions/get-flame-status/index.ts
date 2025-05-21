@@ -3,11 +3,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { corsHeaders } from "../_shared/cors.ts";
 import {
+  FIRST_FLAME_SLUG,
   type RitualDayNumber,
 } from "../_shared/5dayquest/FirstFlame.ts";
 import { loadValidateAndCacheDayDef } from "../_shared/5dayquest/flame-data-loader.ts";
 import {
-  ensureFirstFlameQuest,
+  getOrCreateFirstFlame,
   getOrCreateFirstFlameProgress,
 } from "../_shared/db/firstFlame.ts";
 
@@ -44,14 +45,19 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authErr } = await sbUser.auth.getUser();
     if (authErr || !user?.id) return json({ error: "AUTH" }, 401);
 
-    const { id: questId } = await ensureFirstFlameQuest(sbAdmin);
+    const quest = await getOrCreateFirstFlame(sbAdmin, {
+      title: "First Flame Ritual",
+      type: "ritual",
+      realm: FIRST_FLAME_SLUG,
+      is_pinned: true,
+    });
 
-    await getOrCreateFirstFlameProgress(sbAdmin, user.id, questId);
+    await getOrCreateFirstFlameProgress(sbAdmin, user.id, quest.id);
 
     const { data: progress, error: pe } = await sbUser
       .from("flame_progress")
       .select("current_day_target, is_quest_complete, last_imprint_at, updated_at")
-      .eq("quest_id", questId)
+      .eq("quest_id", quest.id)
       .maybeSingle();
     if (pe) throw pe;
 
