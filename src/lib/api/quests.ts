@@ -769,7 +769,7 @@ export function buildFlameStatusQueryOpts(
   | FunctionsRelayError
   | FunctionsFetchError
   | NetworkError
-  | Error
+  | Error,
   FlameStatusResponse,
   FlameStatusQueryKey
 > {
