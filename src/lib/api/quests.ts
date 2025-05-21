@@ -571,23 +571,17 @@ export async function fetchMessages(
  * available.
  * @returns A promise resolving to a `FlameStatusResponse`.
  */
-export async function fetchFlameStatus(questId: string): Promise<FlameStatusResponse> {
+export async function fetchFlameStatus(): Promise<FlameStatusResponse> {
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user?.id) {
     throw error ?? new Error('User not authenticated');
   }
   const user_id = user.id;
-  if (/^[a-z].*-ritual$/.test(questId)) {
-    console.warn(
-      `[API] fetchFlameStatus received slug-like questId: ${questId}. Did you mean to pass the quest id?`
-    );
-  }
-  const quest_id = questId;
   const flameSpirit = 'ember';
 
   const rawServerData = await invoke<unknown>('get-flame-status', {
     method: 'GET',
-    urlParams: { quest_id, user_id, flameSpirit },
+    urlParams: { user_id, flameSpirit },
   });
 
   if (rawServerData === null) {
@@ -752,10 +746,10 @@ export const defaultFlameStatusQueryOptions: UseQueryOptions<
   | NetworkError         // Custom network error (e.g., client offline)
   | Error,               // Generic JS errors (includes Zod parsing errors from wrappers)
   FlameStatusResponse, // Select data type (typically same as successful data)
-  Readonly<[typeof FLAME_STATUS_BASE_QUERY_KEY[0]]> // Query key type for non-user-specific
+  Readonly<[typeof FLAME_STATUS_BASE_QUERY_KEY[0], string]> // Query key type for non-user-specific, now with questId
 > = {
   queryKey: [...FLAME_STATUS_BASE_QUERY_KEY, FIRST_FLAME_QUEST_ID] as const, // include questId
-  queryFn: () => fetchFlameStatus(FIRST_FLAME_QUEST_ID),
+  queryFn: () => fetchFlameStatus(), // fetchFlameStatus no longer takes questId
   staleTime: 1000 * 60 * 5, // 5 minutes; adjust based on expected data volatility
   retry: false,
   refetchInterval: (data) => (data && (data as any).processing === true ? 2000 : false),
@@ -765,10 +759,11 @@ export const defaultFlameStatusQueryOptions: UseQueryOptions<
  * Builds React Query options for fetching flame status, typically keyed by user ID.
  * Convenience helper for components that want to fetch user-specific status
  * without manually building the query key.
+ * @param questId The ID of the quest. This will be part of the query key.
  * @param uid User ID for keying the query. If null/undefined, uses default non-user-specific options.
  */
 export function buildFlameStatusQueryOpts(
-  questId: string,
+  questId: string, // Retained for query key uniqueness, even if fetchFlameStatus doesn't use it
   uid?: string | null,
 ): UseQueryOptions<
   FlameStatusResponse,
@@ -786,7 +781,7 @@ export function buildFlameStatusQueryOpts(
 
   return {
     queryKey: queryKey,
-    queryFn: () => fetchFlameStatus(questId),
+    queryFn: () => fetchFlameStatus(), // fetchFlameStatus no longer takes questId
     staleTime: 0,
     retry: false,
     refetchInterval: (data) => (data && (data as any).processing === true ? 2000 : false),
@@ -821,12 +816,13 @@ export async function invalidateFlameStatus(
 /**
  * Prefetches the First Flame status using the provided QueryClient.
  * @param queryClient The React Query QueryClient instance.
+ * @param questId The ID of the quest, used for query key uniqueness.
  * @param uid Optional user ID. If provided, prefetches user-specific status with retry logic.
  *            If omitted or null, prefetches using `defaultFlameStatusQueryOptions`.
  */
 export async function prefetchFlameStatus(
   queryClient: QueryClient,
-  questId: string,
+  questId: string, // Retained for query key uniqueness
   uid?: string | null,
 ): Promise<void> {
   if (uid) {
@@ -834,8 +830,8 @@ export async function prefetchFlameStatus(
   } else {
     await queryClient.prefetchQuery({
       ...defaultFlameStatusQueryOptions,
-      queryKey: [...FLAME_STATUS_BASE_QUERY_KEY, questId] as const,
-      queryFn: () => fetchFlameStatus(questId),
+      queryKey: [...FLAME_STATUS_BASE_QUERY_KEY, questId] as const, // questId for key
+      queryFn: () => fetchFlameStatus(), // fetchFlameStatus no longer takes questId
     });
   }
 }
