@@ -255,6 +255,8 @@ type InvokeOptions = Omit<
 > & {
   method?: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
   signal?: AbortSignal; // Make AbortSignal explicitly optional
+  /** Convenience alias for `query` params passed to `supabase.functions.invoke`. */
+  urlParams?: Record<string, string | number | boolean | null | undefined>;
 };
 
 
@@ -314,12 +316,25 @@ async function invoke<TData>(
   }
 
   try {
+    const { urlParams, query, ...rest } = options as InvokeOptions & { query?: Record<string, string> };
+
+    // Merge urlParams into the existing `query` option, coercing values to strings
+    const mergedQuery = {
+      ...(query ?? {}),
+      ...(urlParams
+        ? Object.fromEntries(
+            Object.entries(urlParams).map(([k, v]) => [k, v === undefined || v === null ? '' : String(v)])
+          )
+        : {}),
+    };
+
     // supabase.functions.invoke<TData> implies TData is the type of `data` after potential JSON parsing by the client.
-    const { data, error } = await supabase.functions.invoke<TData>( // TData is now used here as a hint
+    const { data, error } = await supabase.functions.invoke<TData>(
       functionName,
       {
-        ...options,
+        ...rest,
         method: resolvedMethod,
+        query: mergedQuery,
         headers: {
           // Set Content-Type to application/json only if body is a plain object
           // and not FormData, URLSearchParams, Blob, or ReadableStream which have their own Content-Types.
@@ -557,9 +572,17 @@ export async function fetchMessages(
  * @throws {Error} If the response is invalid (e.g., missing dataVersion when not processing or parsing fails).
  */
 export async function fetchFlameStatus(): Promise<FlameStatusPayload | { data: null }> {
-  // Assuming get-flame-status sends correct JSON headers.
-  const rawServerData = await invoke<unknown>("get-flame-status", {
-    method: "GET",
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user?.id) {
+    throw error ?? new Error('User not authenticated');
+  }
+  const user_id = user.id;
+  const quest_id = FIRST_FLAME_QUEST_ID;
+  const day_number = 1;
+
+  const rawServerData = await invoke<unknown>('get-flame-status', {
+    method: 'GET',
+    urlParams: { quest_id, user_id, day_number },
   });
 
   if (rawServerData === null) {
