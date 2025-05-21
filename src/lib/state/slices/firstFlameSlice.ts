@@ -25,7 +25,7 @@ import type {
 } from '@/types/flame'; // Actual import
 
 import {
-  FIRST_FLAME_QUEST_ID,
+  // FIRST_FLAME_QUEST_ID, // Removed by patch
   FIRST_FLAME_TOTAL_DAYS,
   toMilliseconds,
 } from 'supabase/functions/_shared/5dayquest/FirstFlame';
@@ -339,11 +339,11 @@ export const createFirstFlameSlice: StateCreator<
       Math.min(2 ** attempt * 1000 + Math.random() * 200, 30_000);
 
     let attempt = 0;
-    let status: any = await flameApi.fetchFlameStatus(FIRST_FLAME_QUEST_ID);
+    let status: any = await flameApi.fetchFlameStatus(); // Changed by patch (FIRST_FLAME_QUEST_ID argument removed)
     while (status?.processing && attempt < 3) {
       await new Promise(res => setTimeout(res, delayFor(attempt)));
       attempt += 1;
-      status = await flameApi.fetchFlameStatus(FIRST_FLAME_QUEST_ID);
+      status = await flameApi.fetchFlameStatus(); // Changed by patch (FIRST_FLAME_QUEST_ID argument removed)
     }
 
     if (!status?.processing) {
@@ -362,14 +362,7 @@ export const createFirstFlameSlice: StateCreator<
           parts.push(def.oracleGuidance.interactionPrompt);
         const content = parts.join('\n\n').trim();
         if (content) {
-          get().setMessages(FIRST_FLAME_QUEST_ID, [
-            {
-              id: `sys-seed-${Date.now()}`,
-              role: 'system',
-              content,
-              createdAt: new Date(),
-            },
-          ]);
+          // Quest ID is determined dynamically; seed messages when available // Changed by patch
         }
       }
 
