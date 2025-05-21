@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import {
   useCallback,
@@ -8,20 +8,21 @@ import {
   useRef,
   useTransition,
   useDeferredValue,
-} from 'react';
-import { useQuery, useQueryClient, QueryKey } from '@tanstack/react-query';
-import { shallow } from 'zustand/shallow';
-import { useRouter } from 'next/navigation';
-import { FunctionsHttpError } from '@supabase/supabase-js';
-import type { FlipState } from 'gsap/Flip';
+} from "react";
+import { useQuery, useQueryClient, QueryKey } from "@tanstack/react-query";
+import { shallow } from "zustand/shallow";
+import { useRouter } from "next/navigation";
+import { FunctionsHttpError } from "@supabase/supabase-js";
+import type { FlipState } from "gsap/Flip";
 
-import { supabase } from '@/lib/supabase_client/client';
+import { supabase } from "@/lib/supabase_client/client";
+import { getFlameStatus } from "@/lib/api/getFlameStatus";
 import {
   useQuestStore,
   Quest as BaseQuest,
   useSafeSetActiveQuestId,
-} from '@/lib/state/slices/questslice';
-import { useAuth } from '../AuthContext';
+} from "@/lib/state/slices/questslice";
+import { useAuth } from "../AuthContext";
 import {
   FIRST_FLAME_RITUAL_SLUG,
   AppRoutes,
@@ -31,9 +32,9 @@ import {
   UIPanelPhase,
   VIRTUALIZATION_THRESHOLD,
   QUESTS_QUERY_KEY, // Added by diff
-} from './unifiedChatListPanelConstants';
-import { announceToSR } from '@/lib/accessibilityUtils';
-import { seedFirstFlame } from '@/lib/temporal_client'; // 🚩 Temporal client wrapper
+} from "./unifiedChatListPanelConstants";
+import { announceToSR } from "@/lib/accessibilityUtils";
+import { seedFirstFlame } from "@/lib/temporal_client"; // 🚩 Temporal client wrapper
 import { fetchQuestList } from "@/lib/api/quests"; // Added by diff
 
 /* ---------- Types ---------- */
@@ -63,7 +64,10 @@ export type QuestForListItemAugmented = Quest;
 /* ---------- Helpers ---------- */
 class SilentError extends Error {}
 // keyListQuests removed as per diff implication (usage replaced by QUESTS_QUERY_KEY)
-const keyFlameStatus = (uid?: string): QueryKey => ['flame-status', uid ?? 'anon'];
+const keyFlameStatus = (uid?: string): QueryKey => [
+  "flame-status",
+  uid ?? "anon",
+];
 
 const mapQuest = (row: QuestPayloadFromServer): Quest | null => {
   if (!row.id || !row.name || !row.slug) return null;
@@ -74,27 +78,17 @@ const mapQuest = (row: QuestPayloadFromServer): Quest | null => {
   };
 };
 
-const buildFlameStatusQueryOpts = (uid: string) => ({
-  queryKey: keyFlameStatus(uid),
-  queryFn: async () => {
-    if (uid === 'anon') throw new SilentError('anon');
-    const { data, error } = await supabase.functions.invoke<FlameStatusResponse>(
-      'get-flame-status',
-      {
-        method: 'GET',
-        urlParams: {
-          quest_id: FIRST_FLAME_RITUAL_SLUG,
-          user_id: uid,
-          flameSpirit: 'ember',
-        },
-      },
-    );
-    if (error) throw error;
-    return data ?? { overallProgress: null };
-  },
-  staleTime: Infinity as const,
-  gcTime: QUEST_QUERY_GC_TIME as const,
-} as const);
+const buildFlameStatusQueryOpts = (uid: string) =>
+  ({
+    queryKey: keyFlameStatus(uid),
+    queryFn: async () => {
+      if (uid === "anon") throw new SilentError("anon");
+      const { flameStatus } = await getFlameStatus("ember");
+      return { overallProgress: null, flameStatus } as any;
+    },
+    staleTime: Infinity as const,
+    gcTime: QUEST_QUERY_GC_TIME as const,
+  }) as const;
 
 /* -------------------------------------------------------------------------- */
 /* Hook: useUnifiedChatPanelData                                              */
@@ -106,7 +100,6 @@ export const useUnifiedChatPanelData = ({
   initialQuestSlugToSelect?: string | null;
   panelId: string;
 }) => {
-
   const router = useRouter();
   const qc = useQueryClient();
   const { userId, isLoadingAuth, authError } = useAuth();
@@ -116,15 +109,21 @@ export const useUnifiedChatPanelData = ({
 
   /* ---------------- Local state ---------------- */
   const [uiPhase, setUiPhase] = useState<UIPanelPhase>(UIPanelPhase.INTRO);
-  const [errorDisplay, setErrorDisplay] = useState<{ message: string; code?: any } | null>(null);
-  const [searchInput, setSearchInput] = useState('');
+  const [errorDisplay, setErrorDisplay] = useState<{
+    message: string;
+    code?: any;
+  } | null>(null);
+  const [searchInput, setSearchInput] = useState("");
   const deferredSearchInput = useDeferredValue(searchInput);
   const [_isPendingTransitionSearch, startTransition] = useTransition(); // Renamed by diff (_isPendingSearch -> _isPendingTransitionSearch)
 
   const hasDoneInitialAutoSelect = useRef(false);
   const heroButtonFlipStateRef = useRef<FlipState | null>(null);
 
-  const prevListQDataForQuestsMemoRef = useRef<{ rawData: Quest[] | undefined; sortedQuests: Quest[] }>({ rawData: undefined, sortedQuests: [] });
+  const prevListQDataForQuestsMemoRef = useRef<{
+    rawData: Quest[] | undefined;
+    sortedQuests: Quest[];
+  }>({ rawData: undefined, sortedQuests: [] });
 
   /* ---------------- Queries ---------------- */
   const listQ = useQuery({
@@ -144,30 +143,39 @@ export const useUnifiedChatPanelData = ({
     retry: (cnt, err) =>
       !(err instanceof SilentError) &&
       cnt < 2 &&
-      !(err instanceof FunctionsHttpError && (err.context?.status ?? 500) < 500),
-    retryDelay: (attempt) => Math.min(2 ** attempt * 1000 + Math.random() * 200, 30_000),
+      !(
+        err instanceof FunctionsHttpError && (err.context?.status ?? 500) < 500
+      ),
+    retryDelay: (attempt) =>
+      Math.min(2 ** attempt * 1000 + Math.random() * 200, 30_000),
   });
 
   // Preload flame‑status (disabled by default)
-  useQuery({ ...buildFlameStatusQueryOpts(userId ?? 'anon'), enabled: false });
+  useQuery({ ...buildFlameStatusQueryOpts(userId ?? "anon"), enabled: false });
 
   /* ---------------- Derived: quests (stable ref) ---------------- */
   const quests = useMemo(() => {
     const currentRaw = listQ.data?.quests;
     const { rawData: prevRaw, sortedQuests: prevSorted } =
       prevListQDataForQuestsMemoRef.current;
-    if (prevRaw && currentRaw && shallow(prevRaw, currentRaw)) return prevSorted;
+    if (prevRaw && currentRaw && shallow(prevRaw, currentRaw))
+      return prevSorted;
     const sorted = (currentRaw ?? []).slice().sort(sortQuests);
-    prevListQDataForQuestsMemoRef.current = { rawData: currentRaw, sortedQuests: sorted };
+    prevListQDataForQuestsMemoRef.current = {
+      rawData: currentRaw,
+      sortedQuests: sorted,
+    };
     return sorted;
   }, [listQ.data?.quests]);
 
   const questsArray = quests ?? [];
 
   /* ---------------- Phase calculation (memoised) ---------------- */
-  const nextPhase = useMemo(() => { // Variable name `calculatedNextPhase` in diff, `nextPhase` in base. Sticking to `nextPhase` from base for minimal change if logic is same. Diff's logic for phase is identical.
+  const nextPhase = useMemo(() => {
+    // Variable name `calculatedNextPhase` in diff, `nextPhase` in base. Sticking to `nextPhase` from base for minimal change if logic is same. Diff's logic for phase is identical.
     if (listQ.isPending || isLoadingAuth) return UIPanelPhase.INTRO;
-    if (listQ.isError && !(listQ.error instanceof SilentError)) return UIPanelPhase.ERROR;
+    if (listQ.isError && !(listQ.error instanceof SilentError))
+      return UIPanelPhase.ERROR;
     if (!listQ.data?.quests) return uiPhase;
     return listQ.data.quests.length
       ? UIPanelPhase.NORMAL
@@ -188,20 +196,25 @@ export const useUnifiedChatPanelData = ({
   /* ---------------- Actions ---------------- */
   const maybeRedirectToRitualDayOne = useCallback(async () => {
     if (!userId) return;
-    try { // try-catch added by diff
+    try {
+      // try-catch added by diff
       const data = await qc.fetchQuery(buildFlameStatusQueryOpts(userId));
       if (data.overallProgress?.current_day_target === 1) {
         router.replace(AppRoutes.RitualDayOne);
-        announceToSR('Navigating to First Flame – Day 1', { politeness: 'assertive' });
+        announceToSR("Navigating to First Flame – Day 1", {
+          politeness: "assertive",
+        });
       }
-    } catch (error) { // catch block added by diff
-        if (!(error instanceof SilentError)) {
-            console.error('Failed to fetch flame status for redirect:', error);
-        }
+    } catch (error) {
+      // catch block added by diff
+      if (!(error instanceof SilentError)) {
+        console.error("Failed to fetch flame status for redirect:", error);
+      }
     }
   }, [qc, router, userId]);
 
-  const selectQuestSafely = useCallback( // Function signature and logic changed by diff
+  const selectQuestSafely = useCallback(
+    // Function signature and logic changed by diff
     (questId: string | null) => {
       if (!questId) {
         setActiveQuestId(null);
@@ -216,12 +229,18 @@ export const useUnifiedChatPanelData = ({
       startTransition(() => {
         setActiveQuestId(questId); // Was selectQuest(id)
         announceToSR(`Selected ${questToSelect.name}.`); // Was quest.name
-        if (questToSelect.isFirstFlameRitual) { // Was quest.isFirstFlameRitual
+        if (questToSelect.isFirstFlameRitual) {
+          // Was quest.isFirstFlameRitual
           void maybeRedirectToRitualDayOne();
         }
       });
     },
-    [questsArray, setActiveQuestId, startTransition, maybeRedirectToRitualDayOne],
+    [
+      questsArray,
+      setActiveQuestId,
+      startTransition,
+      maybeRedirectToRitualDayOne,
+    ],
   );
 
   const handleRetryLoad = useCallback(() => {
@@ -229,9 +248,12 @@ export const useUnifiedChatPanelData = ({
     qc.invalidateQueries({ queryKey: QUESTS_QUERY_KEY }); // Changed by diff
   }, [qc, userId]); // userId kept in deps as per diff, though QUESTS_QUERY_KEY might be static.
 
-  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchInput(e.target.value);
-  }, []);
+  const handleSearchChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setSearchInput(e.target.value);
+    },
+    [],
+  );
 
   /**
    * 🔥 bootstrapFirstFlame
@@ -246,8 +268,13 @@ export const useUnifiedChatPanelData = ({
       // qc.invalidateQueries({ queryKey: QUESTS_QUERY_KEY }); // Comment updated by diff
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error('[bootstrapFirstFlame] failed', err); // Diff uses console.error("[bootstrapFirstFlame] failed", err);
-      setErrorDisplay({ message: err instanceof Error ? (err as Error).message : 'An unknown error occurred.' }); // Changed by diff
+      console.error("[bootstrapFirstFlame] failed", err); // Diff uses console.error("[bootstrapFirstFlame] failed", err);
+      setErrorDisplay({
+        message:
+          err instanceof Error
+            ? (err as Error).message
+            : "An unknown error occurred.",
+      }); // Changed by diff
     }
   }, [userId, qc]);
 
@@ -265,7 +292,7 @@ export const useUnifiedChatPanelData = ({
       } catch (err) {
         if (!(err instanceof SilentError)) {
           // eslint-disable-next-line no-console
-          console.error('[handleBeginFirstFlame] prefetch failed', err);
+          console.error("[handleBeginFirstFlame] prefetch failed", err);
         }
       }
     }
@@ -281,35 +308,57 @@ export const useUnifiedChatPanelData = ({
 
   /* ------------- Auto‑select & prefetch once data is ready ----------- */
   useEffect(() => {
-    if (hasDoneInitialAutoSelect.current || listQ.isPending || !questsArray.length || !userId) return;
+    if (
+      hasDoneInitialAutoSelect.current ||
+      listQ.isPending ||
+      !questsArray.length ||
+      !userId
+    )
+      return;
 
     const explicit = initialQuestSlugToSelect
       ? questsArray.find((q) => q.slug === initialQuestSlugToSelect)
       : undefined;
-    const target = explicit || questsArray.find((q) => q.isFirstFlameRitual) || questsArray[0];
+    const target =
+      explicit ||
+      questsArray.find((q) => q.isFirstFlameRitual) ||
+      questsArray[0];
 
     if (target) selectQuestSafely(target.id);
     hasDoneInitialAutoSelect.current = true;
 
     // Check query state before prefetching to avoid redundant calls - Added by diff
-    if (!qc.getQueryState(keyFlameStatus(userId ?? 'anon'))) { // userId ?? 'anon' from base, diff has (userId)
-      void qc.prefetchQuery(buildFlameStatusQueryOpts(userId ?? 'anon')); // userId ?? 'anon' from base
+    if (!qc.getQueryState(keyFlameStatus(userId ?? "anon"))) {
+      // userId ?? 'anon' from base, diff has (userId)
+      void qc.prefetchQuery(buildFlameStatusQueryOpts(userId ?? "anon")); // userId ?? 'anon' from base
     }
-  }, [initialQuestSlugToSelect, listQ.isPending, questsArray, qc, userId, selectQuestSafely]);
-
+  }, [
+    initialQuestSlugToSelect,
+    listQ.isPending,
+    questsArray,
+    qc,
+    userId,
+    selectQuestSafely,
+  ]);
 
   /* ------------- Error Display Effect for listQ query ----------- */
   const prevErr = useRef<{ message: string; code?: number } | null>(null);
   useEffect(() => {
     if (listQ.isError && !(listQ.error instanceof SilentError)) {
       const message =
-        listQ.error instanceof Error ? listQ.error.message : 'Failed to load quests.';
+        listQ.error instanceof Error
+          ? listQ.error.message
+          : "Failed to load quests.";
       const code =
-        listQ.error instanceof FunctionsHttpError ? listQ.error.context?.status : undefined;
+        listQ.error instanceof FunctionsHttpError
+          ? listQ.error.context?.status
+          : undefined;
 
-      if (!prevErr.current ||
-          prevErr.current.message !== message ||
-          prevErr.current.code !== code) {
+      if (
+        !prevErr.current ||
+        prevErr.current.message !== message ||
+        prevErr.current.code !== code
+      ) {
         prevErr.current = { message, code };
         setErrorDisplay(prevErr.current);
       }
@@ -319,7 +368,6 @@ export const useUnifiedChatPanelData = ({
     }
   }, [listQ.isError, listQ.error]);
 
-
   /* ---------------- Filters & selectors ---------------- */
   const filteredQuests = useMemo(() => {
     const query = searchInput.trim().toLowerCase();
@@ -327,17 +375,20 @@ export const useUnifiedChatPanelData = ({
     return questsArray.filter((q) => q.name.toLowerCase().includes(query));
   }, [questsArray, searchInput]);
 
-  const shouldVirtualize = useMemo(() => filteredQuests.length >= VIRTUALIZATION_THRESHOLD, [filteredQuests.length]); // .length added by diff
+  const shouldVirtualize = useMemo(
+    () => filteredQuests.length >= VIRTUALIZATION_THRESHOLD,
+    [filteredQuests.length],
+  ); // .length added by diff
   // More accurate isPendingSearch: true if a search is typed but deferred value hasn't updated AND list is fetching
   // Or if the transition for selection is pending.
   // The original `_isPendingTransitionSearch` from `useTransition` was unused.
   // This `isPendingSearch` indicates if the displayed list might be stale due to active search input.
   const isPendingSearch =
     listQ.isFetching &&
-    searchInput.trim().toLowerCase() !== deferredSearchInput.trim().toLowerCase();
+    searchInput.trim().toLowerCase() !==
+      deferredSearchInput.trim().toLowerCase();
 
   const listItemData = filteredQuests ?? [];
-
 
   /* ---------------- Return API ---------------- */
   return {
