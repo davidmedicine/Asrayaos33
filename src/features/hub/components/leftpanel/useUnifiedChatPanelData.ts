@@ -215,7 +215,7 @@ export const useUnifiedChatPanelData = ({
 
   const selectQuestSafely = useCallback(
     // Function signature and logic changed by diff
-    (questId: string | null) => {
+    async (questId: string | null): Promise<void> => {
       if (!questId) {
         setActiveQuestId(null);
         return;
@@ -229,11 +229,12 @@ export const useUnifiedChatPanelData = ({
       startTransition(() => {
         setActiveQuestId(questId); // Was selectQuest(id)
         announceToSR(`Selected ${questToSelect.name}.`); // Was quest.name
-        if (questToSelect.isFirstFlameRitual) {
-          // Was quest.isFirstFlameRitual
-          void maybeRedirectToRitualDayOne();
-        }
       });
+
+      if (questToSelect.isFirstFlameRitual) {
+        // Was quest.isFirstFlameRitual
+        await maybeRedirectToRitualDayOne();
+      }
     },
     [
       questsArray,
@@ -299,7 +300,7 @@ export const useUnifiedChatPanelData = ({
 
     const flameQuest = questsArray.find((q) => q.isFirstFlameRitual);
     if (flameQuest && !hasDoneInitialAutoSelect.current) {
-      selectQuestSafely(flameQuest.id);
+      void selectQuestSafely(flameQuest.id);
       hasDoneInitialAutoSelect.current = true;
     }
 
@@ -324,7 +325,7 @@ export const useUnifiedChatPanelData = ({
       questsArray.find((q) => q.isFirstFlameRitual) ||
       questsArray[0];
 
-    if (target) selectQuestSafely(target.id);
+    if (target) void selectQuestSafely(target.id);
     hasDoneInitialAutoSelect.current = true;
 
     // Check query state before prefetching to avoid redundant calls - Added by diff
