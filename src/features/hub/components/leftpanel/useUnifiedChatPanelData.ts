@@ -78,7 +78,17 @@ const buildFlameStatusQueryOpts = (uid: string) => ({
   queryKey: keyFlameStatus(uid),
   queryFn: async () => {
     if (uid === 'anon') throw new SilentError('anon');
-    const { data, error } = await supabase.functions.invoke<FlameStatusResponse>('get-flame-status');
+    const { data, error } = await supabase.functions.invoke<FlameStatusResponse>(
+      'get-flame-status',
+      {
+        method: 'GET',
+        urlParams: {
+          quest_id: FIRST_FLAME_RITUAL_SLUG,
+          user_id: uid,
+          day_number: 1,
+        },
+      },
+    );
     if (error) throw error;
     return data ?? { overallProgress: null };
   },
