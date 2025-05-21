@@ -3,11 +3,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { corsHeaders } from "../_shared/cors.ts";
 import {
-  FIRST_FLAME_QUEST_ID,
   type RitualDayNumber,
 } from "../_shared/5dayquest/FirstFlame.ts";
 import { loadValidateAndCacheDayDef } from "../_shared/5dayquest/flame-data-loader.ts";
-import { getOrCreateFirstFlameProgress } from "../_shared/db/firstFlame.ts";
+import {
+  ensureFirstFlameQuest,
+  getOrCreateFirstFlameProgress,
+} from "../_shared/db/firstFlame.ts";
 
 const FN = "get-flame-status";
 const SB_URL = Deno.env.get("SUPABASE_URL");
@@ -42,12 +44,14 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authErr } = await sbUser.auth.getUser();
     if (authErr || !user?.id) return json({ error: "AUTH" }, 401);
 
-    await getOrCreateFirstFlameProgress(sbAdmin, user.id, FIRST_FLAME_QUEST_ID);
+    const { id: questId } = await ensureFirstFlameQuest(sbAdmin);
+
+    await getOrCreateFirstFlameProgress(sbAdmin, user.id, questId);
 
     const { data: progress, error: pe } = await sbUser
       .from("flame_progress")
       .select("current_day_target, is_quest_complete, last_imprint_at, updated_at")
-      .eq("quest_id", FIRST_FLAME_QUEST_ID)
+      .eq("quest_id", questId)
       .maybeSingle();
     if (pe) throw pe;
 

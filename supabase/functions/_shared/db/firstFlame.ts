@@ -100,6 +100,23 @@ export async function getOrCreateFirstFlame(
 }
 
 /**
+ * ensureFirstFlameQuest
+ * -----------------------------------------------------
+ * Convenience wrapper returning only the quest id.
+ */
+export async function ensureFirstFlameQuest(
+  admin: SupabaseClient,
+): Promise<{ id: string }> {
+  const quest = await getOrCreateFirstFlame(admin, {
+    title: 'First Flame Ritual',
+    type: 'ritual',
+    realm: 'first_flame',
+    is_pinned: true,
+  });
+  return { id: quest.id };
+}
+
+/**
  * getOrCreateFirstFlameProgress
  * -----------------------------------------------------
  * Ensure a flame_progress row exists for the given user.
