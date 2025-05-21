@@ -15,9 +15,8 @@ import {
   flushSentryEvents,
 }                             from '../_shared/sentry.ts'
 import {
-  getOrCreateFirstFlame,
+  ensureFirstFlameQuest,
   getOrCreateFirstFlameProgress,
-  type QuestRow as MinQuestRow,
 }                             from '../_shared/db/firstFlame.ts'
 import { toISO }              from '../_shared/types/index.ts'
 import {
@@ -131,21 +130,16 @@ Deno.serve(async (req) => {
     if (authErr || !user?.id) return json({ error: 'AUTH' }, 401)
 
     /*── Ensure First-Flame quest exists & caller is a participant ─*/
-    const ff: MinQuestRow = await getOrCreateFirstFlame(sbAdmin, {
-      title    : 'First Flame Ritual',
-      type     : 'ritual',
-      realm    : 'first_flame',
-      is_pinned: true,
-    })
+    const { id: questId } = await ensureFirstFlameQuest(sbAdmin)
 
     const { error: upsertErr } = await sbAdmin.from('quest_participants').upsert(
-      { quest_id: ff.id, user_id: user.id, role: 'participant' },
+      { quest_id: questId, user_id: user.id, role: 'participant' },
       { onConflict: 'quest_id,user_id', ignoreDuplicates: true },
     )
     if (upsertErr) console.error(`[${FN}] quest_participants upsert error`, upsertErr)
 
     try {
-      await getOrCreateFirstFlameProgress(sbAdmin, user.id, ff.id)
+      await getOrCreateFirstFlameProgress(sbAdmin, user.id, questId)
     } catch (pe) {
       console.error(`[${FN}] flame_progress upsert error`, pe)
     }

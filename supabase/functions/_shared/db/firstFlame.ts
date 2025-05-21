@@ -128,3 +128,21 @@ export async function getOrCreateFirstFlameProgress(
     throw error;
   }
 }
+
+/**
+ * ensureFirstFlameQuest
+ * -----------------------------------------------------
+ * Thin wrapper used by Edge Functions to guarantee the
+ * First Flame quest exists and return only its id.
+ */
+export async function ensureFirstFlameQuest(
+  admin: SupabaseClient,
+): Promise<{ id: string }> {
+  const { id } = await getOrCreateFirstFlame(admin, {
+    title: 'First Flame Ritual',
+    type: 'ritual',
+    realm: 'first_flame',
+    is_pinned: true,
+  });
+  return { id };
+}
