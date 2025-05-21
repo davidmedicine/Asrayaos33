@@ -31,6 +31,7 @@ import type {
   FlameImprintServer,
   FlameProgressDayServer,
   FlameStatusPayload, // This is the type when data IS available (processing: false)
+  FlameStatusResponse,
   SubmitImprintArgs as FirstFlameSubmitImprintArgs,
 } from "@/types/flame";
 
@@ -564,14 +565,12 @@ export async function fetchMessages(
 
 /**
  * Fetches the current status of the First Flame ritual.
- * Parses the Edge Function response. If the backend indicates data is still
- * preparing (processing: true), it throws a `ProcessingError` to enable
- * React Query retries. Otherwise, it validates and returns the full status.
- * @returns A promise resolving to the `FlameStatusPayload` (data-rich type).
- * @throws {ProcessingError} If the status is still processing.
- * @throws {Error} If the response is invalid (e.g., missing dataVersion when not processing or parsing fails).
+ * If required fields are missing or a stub payload is returned, the function
+ * resolves with `{ processing: true }` so callers can poll until real data is
+ * available.
+ * @returns A promise resolving to a `FlameStatusResponse`.
  */
-export async function fetchFlameStatus(): Promise<FlameStatusPayload | { data: null }> {
+export async function fetchFlameStatus(): Promise<FlameStatusResponse> {
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user?.id) {
     throw error ?? new Error('User not authenticated');
@@ -586,7 +585,7 @@ export async function fetchFlameStatus(): Promise<FlameStatusPayload | { data: n
   });
 
   if (rawServerData === null) {
-    return { data: null };
+    return { processing: true };
   }
 
   // Note: If 'get-flame-status' might also return a string due to missing headers,
@@ -596,15 +595,15 @@ export async function fetchFlameStatus(): Promise<FlameStatusPayload | { data: n
   if (!parsedResult.success) {
     console.error("[API] fetchFlameStatus: Failed to parse response:", parsedResult.error.flatten());
     if (process.env.NODE_ENV !== "production") {
-        console.error("[API] fetchFlameStatus: Data that failed Zod validation:", rawServerData);
+      console.error("[API] fetchFlameStatus: Data that failed Zod validation:", rawServerData);
     }
-    throw new Error(`Failed to parse flame status response. Issues: ${parsedResult.error.message}`);
+    return { processing: true };
   }
   const serverResponse = parsedResult.data;
 
 
   if (serverResponse.processing) {
-    throw new ProcessingError();
+    return { processing: true };
   }
 
   if (
@@ -617,10 +616,9 @@ export async function fetchFlameStatus(): Promise<FlameStatusPayload | { data: n
   ) {
     const errorMsg = '[API] fetchFlameStatus: Response is invalid - missing required fields when not processing.';
     if (process.env.NODE_ENV !== 'production') {
-      // serverResponse here is the Zod-parsed (but still partial/invalid for FlameStatusPayload) data
       console.error(errorMsg, { serverResponse });
     }
-    throw new Error(errorMsg.replace('[API] fetchFlameStatus: ', ''));
+    return { processing: true };
   }
 
   if (typeof (serverResponse as any).progress !== 'number') {
@@ -633,7 +631,10 @@ export async function fetchFlameStatus(): Promise<FlameStatusPayload | { data: n
     }
   }
 
-  return serverResponse as FlameStatusPayload;
+  return {
+    processing: false,
+    ...serverResponse,
+  } as FlameStatusResponse;
 }
 
 
@@ -738,39 +739,38 @@ export const QUESTS_QUERY_KEY = ['list-quests'] as const;
  * Explicitly typed for React Query v5 strict mode compatibility.
  */
 export const defaultFlameStatusQueryOptions: UseQueryOptions<
-  FlameStatusPayload, // Data type on success
+  FlameStatusResponse, // Data type on success
   | FunctionsHttpError // Supabase HTTP error
   | FunctionsRelayError  // Supabase Relay error
   | FunctionsFetchError  // Supabase Fetch error (network layer before HTTP)
   | NetworkError         // Custom network error (e.g., client offline)
-  | Error                // Generic JS errors (includes Zod parsing errors from wrappers)
-  | ProcessingError,     // Custom error for server-side processing
-  FlameStatusPayload, // Select data type (typically same as successful data)
+  | Error,               // Generic JS errors (includes Zod parsing errors from wrappers)
+  FlameStatusResponse, // Select data type (typically same as successful data)
   Readonly<[typeof FLAME_STATUS_BASE_QUERY_KEY[0]]> // Query key type for non-user-specific
 > = {
   queryKey: FLAME_STATUS_BASE_QUERY_KEY, // Non-user-specific key
   queryFn: fetchFlameStatus,
   staleTime: 1000 * 60 * 5, // 5 minutes; adjust based on expected data volatility
-  retry: (n, err) => (err as any)?.processing === true && n < 4,
-  retryDelay: attempt => Math.min(1000 * 2 ** attempt, 8000),
+  retry: false,
+  refetchInterval: (data) => (data && (data as any).processing === true ? 2000 : false),
 };
 
 /**
  * Builds React Query options for fetching flame status, typically keyed by user ID.
- * Includes retry logic for `ProcessingError` (when server indicates data is still processing).
+ * Convenience helper for components that want to fetch user-specific status
+ * without manually building the query key.
  * @param uid User ID for keying the query. If null/undefined, uses default non-user-specific options.
  */
 export function buildFlameStatusQueryOpts(
   uid?: string | null,
 ): UseQueryOptions<
-  FlameStatusPayload,
+  FlameStatusResponse,
   | FunctionsHttpError
   | FunctionsRelayError
   | FunctionsFetchError
   | NetworkError
   | Error
-  | ProcessingError,
-  FlameStatusPayload,
+  FlameStatusResponse,
   FlameStatusQueryKey
 > {
   const queryKey = uid ? [...FLAME_STATUS_BASE_QUERY_KEY, uid] as const : FLAME_STATUS_BASE_QUERY_KEY;
@@ -778,14 +778,9 @@ export function buildFlameStatusQueryOpts(
   return {
     queryKey: queryKey,
     queryFn: fetchFlameStatus,
-    staleTime: 0, 
-    retry: (failureCount, error) => {
-      if (error instanceof ProcessingError) {
-        return failureCount < 4;
-      }
-      return false;
-    },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 8000),
+    staleTime: 0,
+    retry: false,
+    refetchInterval: (data) => (data && (data as any).processing === true ? 2000 : false),
   } as const;
 }
 
