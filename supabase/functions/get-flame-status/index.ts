@@ -13,7 +13,7 @@ const json = (data: unknown, status = 200): Response =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 
-Deno.serve(async (req) => {
+export const handler = async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   const authHdr = req.headers.get('Authorization') ?? ''
@@ -80,4 +80,6 @@ Deno.serve(async (req) => {
   }
 
   return json(row, 200)
-})
+}
+
+Deno.serve(handler)
