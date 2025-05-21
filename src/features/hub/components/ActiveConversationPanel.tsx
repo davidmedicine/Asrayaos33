@@ -75,8 +75,8 @@ const ActiveConversationPanelComponent: React.FC<ActiveConversationPanelProps> =
     (s) => ({ isDebugModeEnabled: s.isDebugModeEnabled, enableViewTransition: s.enableViewTransition }),
     shallow
   );
-  const { setContext: setZustandQuestContext } = useContextStore(
-    (s) => ({ setContext: s.setContext }),
+  const { setQuestContext: setZustandQuestContext, clearQuestContext } = useContextStore(
+    (s) => ({ setQuestContext: s.setQuestContext, clearQuestContext: s.clearQuestContext }),
     shallow
   );
   const addToast = useNotificationStore(state => state.addToast);
@@ -104,6 +104,7 @@ const ActiveConversationPanelComponent: React.FC<ActiveConversationPanelProps> =
     },
     onError: (error) => {
       console.error(`[ActiveConversationPanel] Error fetching flame status for ${activeQuestId}:`, error);
+      if (activeQuestId) clearQuestContext(activeQuestId);
     }
   });
 
@@ -253,7 +254,9 @@ const ActiveConversationPanelComponent: React.FC<ActiveConversationPanelProps> =
         </div>
       );
     }
-    if (flameQuery.isLoading && !flameQuery.data && uiPhase === 'oracle_awaiting') return <LoadingContextFallback />;
+    if ((flameQuery.isLoading || flameQuery.isError) && !flameQuery.data && uiPhase === 'oracle_awaiting') {
+      return <LoadingContextFallback />;
+    }
     const useNativeVT = typeof document !== 'undefined' && 'startViewTransition' in document && devToolsVTEnabled && !prefersReducedMotion;
     const vtStyle: React.CSSProperties = useNativeVT ? { viewTransitionName: `acp-content-area-${activeQuestId || 'none'}` } : {};
 
