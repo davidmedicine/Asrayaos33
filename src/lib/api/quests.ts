@@ -578,11 +578,11 @@ export async function fetchFlameStatus(): Promise<FlameStatusPayload | { data: n
   }
   const user_id = user.id;
   const quest_id = FIRST_FLAME_QUEST_ID;
-  const day_number = 1;
+  const flameSpirit = 'ember';
 
   const rawServerData = await invoke<unknown>('get-flame-status', {
     method: 'GET',
-    urlParams: { quest_id, user_id, day_number },
+    urlParams: { quest_id, user_id, flameSpirit },
   });
 
   if (rawServerData === null) {
