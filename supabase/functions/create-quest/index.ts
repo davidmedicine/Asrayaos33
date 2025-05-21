@@ -10,7 +10,7 @@ import { flushSentryEvents }   from '../_shared/sentry.ts';
 import { LOG_STAGES }         from '../_shared/5dayquest/ritual.constants.ts';
 
 /*────────────────────────  Config / ENV  ───────────────────────*/
-const FN       = 'get-flame-status';
+const FN       = 'create-quest';
 const SB_URL   = Deno.env.get('SUPABASE_URL');
 const SB_ANON  = Deno.env.get('SUPABASE_ANON_KEY');
 const SB_SVC   = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
