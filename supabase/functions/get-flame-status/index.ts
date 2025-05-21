@@ -24,7 +24,8 @@ const safeJson = async (r: Request) => {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (req.method === 'OPTIONS')
+    return new Response(null, { status: 204, headers: corsHeaders })
 
   const authHdr = req.headers.get('Authorization') ?? ''
   if (!authHdr.startsWith('Bearer ')) return json({ error: 'AUTH' }, 401)
@@ -36,7 +37,10 @@ Deno.serve(async (req) => {
   const dayNumber = reqJson?.day_number ?? urlParams.get('day_number')
 
   if (!questId || !userId || dayNumber == null)
-    return new Response('quest_id, user_id, day_number required', { status: 400 })
+    return new Response('quest_id, user_id, day_number required', {
+      status: 400,
+      headers: corsHeaders,
+    })
 
   const sbUser = createClient(SB_URL, SB_ANON, {
     global: { headers: { Authorization: authHdr } },
@@ -69,9 +73,12 @@ Deno.serve(async (req) => {
       })
     } catch (err) {
       console.error('[get-flame-status] broadcast error', err)
-      return new Response((err as Error).message, { status: 500 })
+      return new Response((err as Error).message, {
+        status: 500,
+        headers: corsHeaders,
+      })
     }
-    return new Response(null, { status: 204 })
+    return new Response(null, { status: 204, headers: corsHeaders })
   }
 
   if (row.status === 'pending') {
@@ -81,7 +88,10 @@ Deno.serve(async (req) => {
       })
     } catch (err) {
       console.error('[get-flame-status] broadcast error', err)
-      return new Response((err as Error).message, { status: 500 })
+      return new Response((err as Error).message, {
+        status: 500,
+        headers: corsHeaders,
+      })
     }
     return json({ processing: true }, 202)
   }
