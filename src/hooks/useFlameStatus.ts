@@ -19,8 +19,8 @@ import {
   useQuery, useQueryClient, type UseQueryResult,
 } from '@tanstack/react-query';
 import { useEffect } from 'react';
-// Assuming FLAME_STATUS_QUERY_KEY and ProcessingError are exported from the API module
-import { fetchFlameStatus, FLAME_STATUS_QUERY_KEY, ProcessingError } from '@/lib/api/quests';
+// Query helpers for First Flame status
+import { fetchFlameStatus, FLAME_STATUS_QUERY_KEY } from '@/lib/api/quests';
 import { useBoundStore } from '@/lib/state/store';
 // FlameStatusResponse should contain `dataVersion: number` (or similar) for version comparison.
 import type { FlameStatusResponse } from '@flame';
@@ -78,11 +78,9 @@ export function useFlameStatus(): UseQueryResult<FlameStatusResponse, unknown> {
     placeholderData: (previous) => previous, // UX: TanStack v5 pattern. Keeps old data visible, no UI flash.
     // SSR/Offline: Skip fetch if restoring from SSR hydration or if offline.
     enabled: !queryClient.isRestoring && (typeof navigator !== 'undefined' ? navigator.onLine : true),
-    retryDelay: flameStatusRetryDelay, // Apply custom exponential backoff
+    retryDelay: flameStatusRetryDelay,
     // Default retry for React Query is 3 times for queryFn failures.
-    // If fetchFlameStatus throws ProcessingError, it will be retried with this delay.
-    // A more specific `retry: (failureCount, error) => boolean` predicate could be added
-    // if different retry counts are needed for ProcessingError vs. other errors.
+    refetchInterval: (data) => (data && (data as any).processing === true ? 2000 : false),
 
     onSuccess: (data: FlameStatusResponse) => {
       // Silent Hydration: Update slice only if fetched data is newer.
@@ -94,12 +92,6 @@ export function useFlameStatus(): UseQueryResult<FlameStatusResponse, unknown> {
       }
     },
     onError: (err: unknown) => { // Error Bubbling: Surface typed errors to Zustand slice.
-      // If it's a ProcessingError, let React Query handle retries. Don't set slice error.
-      if (err instanceof ProcessingError) {
-        // TanStack Query will handle retrying based on `retry` and `retryDelay` options.
-        // This error is part of the retry flow, not a terminal failure for the UI yet.
-        return;
-      }
 
       if (isSupabaseRpcError(err)) {
         setError({ type: 'supabase', status: err.status, message: err.message });
