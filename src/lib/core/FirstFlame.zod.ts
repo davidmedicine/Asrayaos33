@@ -39,7 +39,7 @@ export const zFirstFlameOverallProgress = z.object({
 
 export const zStartFirstFlameResponse = z.object({
   success          : z.boolean(),
-  questId          : z.literal('first-flame-ritual'),
+  questId          : z.string().uuid(), // Changed from z.literal('first-flame-ritual')
   overallProgress  : zFirstFlameOverallProgress.nullable(),
   questDisplayName : z.string(),
   code             : z.string().optional(),  // e.g. 'already_started'
