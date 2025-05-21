@@ -8,6 +8,7 @@ const sb = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 );
 
+// TODO: handle CORS headers and respond to OPTIONS preflight
 Deno.serve(async (req) => {
   const { channel: channelName, event, payload } = await req.json();
 
