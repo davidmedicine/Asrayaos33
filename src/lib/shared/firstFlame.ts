@@ -6,6 +6,13 @@ import type { ReadonlyDeep } from 'type-fest';
 export const FIRST_FLAME_SLUG       = 'first-flame-ritual' as const;
 export const FIRST_FLAME_TOTAL_DAYS = 5 as const;
 
+/** ------------------------------------------------------------------ *
+ *  TEMP-shim: keep legacy imports compiling.                          *
+ *  Remove once all call-sites use FIRST_FLAME_SLUG directly.          *
+ *  ------------------------------------------------------------------ */
+/** @deprecated – use FIRST_FLAME_SLUG instead */
+export const FIRST_FLAME_QUEST_ID = FIRST_FLAME_SLUG;
+
 /*--------------------------------------------------------------*
  | 2 · Ritual-stage enums re-exported for convenience            |
  *   (path alias “@ritual/…” is wired in tsconfig + webpack)     |
