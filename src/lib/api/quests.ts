@@ -26,6 +26,7 @@ import type { Message as VercelMessage } from "ai/react"; // From original file 
 import { z } from 'zod';
 
 import { supabase } from "@/lib/supabase_client/client";
+import { progressFromStatus } from './progressFromStatus';
 import type {
   FlameImprintServer,
   FlameProgressDayServer,
@@ -555,11 +556,15 @@ export async function fetchMessages(
  * @throws {ProcessingError} If the status is still processing.
  * @throws {Error} If the response is invalid (e.g., missing dataVersion when not processing or parsing fails).
  */
-export async function fetchFlameStatus(): Promise<FlameStatusPayload> {
+export async function fetchFlameStatus(): Promise<FlameStatusPayload | { data: null }> {
   // Assuming get-flame-status sends correct JSON headers.
   const rawServerData = await invoke<unknown>("get-flame-status", {
     method: "GET",
   });
+
+  if (rawServerData === null) {
+    return { data: null };
+  }
 
   // Note: If 'get-flame-status' might also return a string due to missing headers,
   // the same string parsing logic from fetchQuestList would be needed here.
@@ -593,6 +598,16 @@ export async function fetchFlameStatus(): Promise<FlameStatusPayload> {
       console.error(errorMsg, { serverResponse });
     }
     throw new Error(errorMsg.replace('[API] fetchFlameStatus: ', ''));
+  }
+
+  if (typeof (serverResponse as any).progress !== 'number') {
+    const derived = progressFromStatus({
+      progress: serverResponse.progress as any,
+      totalDays: serverResponse.totalDays,
+    });
+    if (typeof derived === 'number') {
+      (serverResponse as any).progress = derived;
+    }
   }
 
   return serverResponse as FlameStatusPayload;
@@ -713,8 +728,8 @@ export const defaultFlameStatusQueryOptions: UseQueryOptions<
   queryKey: FLAME_STATUS_BASE_QUERY_KEY, // Non-user-specific key
   queryFn: fetchFlameStatus,
   staleTime: 1000 * 60 * 5, // 5 minutes; adjust based on expected data volatility
-  retry: (n, err) => (err as any)?.processing === true && n < 5,
-  retryDelay: attempt => Math.min(1000 * 2 ** attempt, 10000),
+  retry: (n, err) => (err as any)?.processing === true && n < 4,
+  retryDelay: attempt => Math.min(1000 * 2 ** attempt, 8000),
 };
 
 /**
@@ -743,11 +758,11 @@ export function buildFlameStatusQueryOpts(
     staleTime: 0, 
     retry: (failureCount, error) => {
       if (error instanceof ProcessingError) {
-        return failureCount < 3; // Max 3 retries
+        return failureCount < 4;
       }
       return false;
     },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 15000),
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 8000),
   } as const;
 }
 
