@@ -18,7 +18,7 @@ function walk(dir: string): string[] {
 }
 
 describe('get-flame-status call lint', () => {
-  it('ensures quest_id, user_id and day_number are present', () => {
+  it('ensures quest_id, user_id and flameSpirit are present', () => {
     const files = walk(SRC_DIR);
     const violations: string[] = [];
     const search = "functions.invoke('get-flame-status'";
@@ -29,7 +29,7 @@ describe('get-flame-status call lint', () => {
       while (idx !== -1) {
         const end = content.indexOf(')', idx);
         const snippet = end !== -1 ? content.slice(idx, end + 1) : content.slice(idx);
-        if (!snippet.includes('quest_id') || !snippet.includes('user_id') || !snippet.includes('day_number')) {
+        if (!snippet.includes('quest_id') || !snippet.includes('user_id') || !snippet.includes('flameSpirit')) {
           violations.push(`${file}: ${snippet.replace(/\s+/g, ' ').trim()}`);
         }
         idx = content.indexOf(search, idx + search.length);

@@ -85,7 +85,7 @@ const buildFlameStatusQueryOpts = (uid: string) => ({
         urlParams: {
           quest_id: FIRST_FLAME_RITUAL_SLUG,
           user_id: uid,
-          day_number: 1,
+          flameSpirit: 'ember',
         },
       },
     );
