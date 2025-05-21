@@ -38,6 +38,8 @@ export interface InvokeOptions {
   body?: unknown;
   /** Extra headers, merged *after* `devHeaders` so you can override them. */
   headers?: Record<string, string>;
+  /** Optional query string parameters appended to the function path. */
+  urlParams?: Record<string, string | number>;
   /** Optional AbortSignal for cancellation / React Suspense timeouts. */
   signal?: AbortSignal;
 }
@@ -52,7 +54,15 @@ export async function invoke<T>(
   functionName: string,
   opts: InvokeOptions = {},
 ): Promise<T> {
-  const { method, body, headers, signal } = opts;
+  const { method, body, headers, signal, urlParams } = opts;
+
+  let path = functionName;
+  if (urlParams && Object.keys(urlParams).length) {
+    const qs = new URLSearchParams(
+      Object.entries(urlParams).map(([k, v]) => [k, String(v)])
+    ).toString();
+    path = `${functionName}?${qs}`;
+  }
 
   /* ---------- decide verb ---------- */
   const httpMethod: HttpVerb =
@@ -69,7 +79,7 @@ export async function invoke<T>(
 
   /* ---------- call the Edge Function ---------- */
   try {
-    const { data, error } = await supabase.functions.invoke<T>(functionName, {
+    const { data, error } = await supabase.functions.invoke<T>(path, {
       method: httpMethod,
       signal,
       body: body === undefined ? undefined : JSON.stringify(body),
