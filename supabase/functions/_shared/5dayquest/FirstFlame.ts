@@ -3,7 +3,6 @@
  * Single source of truth for "First Flame" related types and core identifiers.
  * Explicitly re-exports constants from './ritual.constants.ts' for a unified API.
  * ────────────────────────────────────────────────*/
-
 import type { ReadonlyDeep } from 'type-fest';
 
 // Explicit re-exports to avoid namespace collisions and aid auto-imports.
@@ -18,11 +17,8 @@ export type { RitualStage, RitualDayNumber, LogStage } from './ritual.constants.
 
 // Import locally used types that were re-exported.
 import type { RitualStage as LocalRitualStage, RitualDayNumber as LocalRitualDayNumber } from './ritual.constants.ts';
-
-
 /** 🚩 1. Core Identifiers & Configuration */
 export const FIRST_FLAME_SLUG = 'first-flame-ritual' as const;
-export const FIRST_FLAME_QUEST_ID = FIRST_FLAME_SLUG;
 export const FIRST_FLAME_TOTAL_DAYS = 5 as const;
 
 /** 🚩 2. ISO-Timestamp Helpers (Branded Type) */
