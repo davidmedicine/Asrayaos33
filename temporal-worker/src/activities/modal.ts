@@ -33,9 +33,14 @@ const http = axios.create({
  * --------------------------------
  * Idempotently seeds / refreshes First-Flame rows for the given user.
  */
-export async function ensureFlameState(userId: string): Promise<void> {
+export interface FlameActivityParams {
+  userId: string;
+  questId: string;
+}
+
+export async function ensureFlameState({ userId, questId }: FlameActivityParams): Promise<void> {
   try {
-    await http.post(MODAL_KICK_URL, { user_id: userId });
+    await http.post(MODAL_KICK_URL, { user_id: userId, quest_id: questId });
   } catch (err) {
     const e = err as AxiosError;
     throw new Error(
@@ -50,9 +55,9 @@ export async function ensureFlameState(userId: string): Promise<void> {
  * --------------------------------
  * Inserts canned Day-1 system & prompt messages for the user.
  */
-export async function insertDayOneMessages(userId: string): Promise<void> {
+export async function insertDayOneMessages({ userId, questId }: FlameActivityParams): Promise<void> {
   try {
-    await http.post(SUPABASE_INSERT_DAY1_URL, { user_id: userId });
+    await http.post(SUPABASE_INSERT_DAY1_URL, { user_id: userId, quest_id: questId });
   } catch (err) {
     const e = err as AxiosError;
     throw new Error(
@@ -67,12 +72,12 @@ export async function insertDayOneMessages(userId: string): Promise<void> {
  * --------------------------------
  * Emits `flame_status:ready` so the UI knows to refetch ritual data.
  */
-export async function broadcastReady(userId: string): Promise<void> {
+export async function broadcastReady({ userId, questId }: FlameActivityParams): Promise<void> {
   try {
     await http.post(SUPABASE_RPC_URL, {
       channel: 'flame_status',
       event  : 'ready',
-      payload: { user_id: userId },
+      payload: { user_id: userId, quest_id: questId },
     });
   } catch (err) {
     const e = err as AxiosError;
