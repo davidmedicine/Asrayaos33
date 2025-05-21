@@ -21,6 +21,7 @@ import {
 import { useEffect } from 'react';
 // Query helpers for First Flame status
 import { fetchFlameStatus, FLAME_STATUS_QUERY_KEY } from '@/lib/api/quests';
+import { FIRST_FLAME_QUEST_ID } from '@flame';
 import { useBoundStore } from '@/lib/state/store';
 // FlameStatusResponse should contain `dataVersion: number` (or similar) for version comparison.
 import type { FlameStatusResponse } from '@flame';
@@ -48,7 +49,9 @@ const flameStatusRetryDelay = (attemptIndex: number): number => {
   return Math.min(1000 * 2 ** attemptIndex, 20000);
 };
 
-export function useFlameStatus(): UseQueryResult<FlameStatusResponse, unknown> {
+export function useFlameStatus(
+  questId: string = FIRST_FLAME_QUEST_ID,
+): UseQueryResult<FlameStatusResponse, unknown> {
   const queryClient = useQueryClient();
   // Stable selectors for Zustand actions and version, preventing re-subscriptions.
   const hydrate = useBoundStore((s) => s.firstFlame._hydrateFromServer);
@@ -72,7 +75,7 @@ export function useFlameStatus(): UseQueryResult<FlameStatusResponse, unknown> {
     typeof FLAME_STATUS_QUERY_KEY // TQueryKey: strictly typed using the constant
   >({
     queryKey: FLAME_STATUS_QUERY_KEY, // Use the exported constant
-    queryFn: fetchFlameStatus,
+    queryFn: () => fetchFlameStatus(questId),
     staleTime: 0, // Ritual UX: Data is always considered stale, ensuring refetch on mount.
     refetchOnWindowFocus: true, // Ritual UX: Ensures progress updates if user worked in another tab.
     placeholderData: (previous) => previous, // UX: TanStack v5 pattern. Keeps old data visible, no UI flash.

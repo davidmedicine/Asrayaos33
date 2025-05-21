@@ -27,6 +27,7 @@ import { z } from 'zod';
 
 import { supabase } from "@/lib/supabase_client/client";
 import { progressFromStatus } from './progressFromStatus';
+import { FIRST_FLAME_QUEST_ID } from '@flame';
 import type {
   FlameImprintServer,
   FlameProgressDayServer,
@@ -537,7 +538,7 @@ export async function createQuest(
 
   if (newQuest.slug === FIRST_FLAME_SLUG) {
     await invalidateFlameStatusQueries(queryClient);
-    await prefetchFlameStatus(queryClient, uid);
+    await prefetchFlameStatus(queryClient, newQuest.id, uid);
   }
   return newQuest;
 }
@@ -570,13 +571,18 @@ export async function fetchMessages(
  * available.
  * @returns A promise resolving to a `FlameStatusResponse`.
  */
-export async function fetchFlameStatus(): Promise<FlameStatusResponse> {
+export async function fetchFlameStatus(questId: string): Promise<FlameStatusResponse> {
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user?.id) {
     throw error ?? new Error('User not authenticated');
   }
   const user_id = user.id;
-  const quest_id = FIRST_FLAME_QUEST_ID;
+  if (/^[a-z].*-ritual$/.test(questId)) {
+    console.warn(
+      `[API] fetchFlameStatus received slug-like questId: ${questId}. Did you mean to pass the quest id?`
+    );
+  }
+  const quest_id = questId;
   const flameSpirit = 'ember';
 
   const rawServerData = await invoke<unknown>('get-flame-status', {
@@ -748,8 +754,8 @@ export const defaultFlameStatusQueryOptions: UseQueryOptions<
   FlameStatusResponse, // Select data type (typically same as successful data)
   Readonly<[typeof FLAME_STATUS_BASE_QUERY_KEY[0]]> // Query key type for non-user-specific
 > = {
-  queryKey: FLAME_STATUS_BASE_QUERY_KEY, // Non-user-specific key
-  queryFn: fetchFlameStatus,
+  queryKey: [...FLAME_STATUS_BASE_QUERY_KEY, FIRST_FLAME_QUEST_ID] as const, // include questId
+  queryFn: () => fetchFlameStatus(FIRST_FLAME_QUEST_ID),
   staleTime: 1000 * 60 * 5, // 5 minutes; adjust based on expected data volatility
   retry: false,
   refetchInterval: (data) => (data && (data as any).processing === true ? 2000 : false),
@@ -762,6 +768,7 @@ export const defaultFlameStatusQueryOptions: UseQueryOptions<
  * @param uid User ID for keying the query. If null/undefined, uses default non-user-specific options.
  */
 export function buildFlameStatusQueryOpts(
+  questId: string,
   uid?: string | null,
 ): UseQueryOptions<
   FlameStatusResponse,
@@ -773,11 +780,13 @@ export function buildFlameStatusQueryOpts(
   FlameStatusResponse,
   FlameStatusQueryKey
 > {
-  const queryKey = uid ? [...FLAME_STATUS_BASE_QUERY_KEY, uid] as const : FLAME_STATUS_BASE_QUERY_KEY;
+  const queryKey = uid
+    ? [...FLAME_STATUS_BASE_QUERY_KEY, questId, uid] as const
+    : [...FLAME_STATUS_BASE_QUERY_KEY, questId] as const;
 
   return {
     queryKey: queryKey,
-    queryFn: fetchFlameStatus,
+    queryFn: () => fetchFlameStatus(questId),
     staleTime: 0,
     retry: false,
     refetchInterval: (data) => (data && (data as any).processing === true ? 2000 : false),
@@ -817,11 +826,16 @@ export async function invalidateFlameStatus(
  */
 export async function prefetchFlameStatus(
   queryClient: QueryClient,
+  questId: string,
   uid?: string | null,
 ): Promise<void> {
   if (uid) {
-    await queryClient.prefetchQuery(buildFlameStatusQueryOpts(uid));
+    await queryClient.prefetchQuery(buildFlameStatusQueryOpts(questId, uid));
   } else {
-    await queryClient.prefetchQuery(defaultFlameStatusQueryOptions);
+    await queryClient.prefetchQuery({
+      ...defaultFlameStatusQueryOptions,
+      queryKey: [...FLAME_STATUS_BASE_QUERY_KEY, questId] as const,
+      queryFn: () => fetchFlameStatus(questId),
+    });
   }
 }

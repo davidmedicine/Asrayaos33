@@ -339,11 +339,11 @@ export const createFirstFlameSlice: StateCreator<
       Math.min(2 ** attempt * 1000 + Math.random() * 200, 30_000);
 
     let attempt = 0;
-    let status: any = await flameApi.fetchFlameStatus();
+    let status: any = await flameApi.fetchFlameStatus(FIRST_FLAME_QUEST_ID);
     while (status?.processing && attempt < 3) {
       await new Promise(res => setTimeout(res, delayFor(attempt)));
       attempt += 1;
-      status = await flameApi.fetchFlameStatus();
+      status = await flameApi.fetchFlameStatus(FIRST_FLAME_QUEST_ID);
     }
 
     if (!status?.processing) {

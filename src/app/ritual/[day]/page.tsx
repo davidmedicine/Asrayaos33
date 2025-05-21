@@ -4,6 +4,7 @@ import { ViewTransition } from 'react'; // React 19
 import { useQuery } from '@tanstack/react-query';
 import { FlameStatusResponse } from '@flame'; // Changed from FlameStatusPayload
 import { fetchFlameStatus } from '@/lib/api/quests';
+import { FIRST_FLAME_QUEST_ID } from '@flame';
 
 // Assuming FullPageSpinner, ErrorState, and DayLayout are defined elsewhere
 // For completeness, let's add dummy versions if they weren't part of the original snippet.
@@ -20,8 +21,8 @@ const DayLayout = ({ def, imprints }: { def: any; imprints: any }) => (
 
 export default function RitualDay({ params:{ day } }: { params: { day: string } }) { // Added type for params
   const { data, isPending, error } = useQuery<FlameStatusResponse>({ // Explicitly typed useQuery
-    queryKey: ['flame-status'],
-    queryFn : fetchFlameStatus,
+    queryKey: ['flame-status', FIRST_FLAME_QUEST_ID],
+    queryFn : () => fetchFlameStatus(FIRST_FLAME_QUEST_ID),
     staleTime: 0,
     placeholderData: previous => previous,
   });
