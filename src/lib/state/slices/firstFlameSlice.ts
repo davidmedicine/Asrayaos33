@@ -25,7 +25,6 @@ import type {
 } from '@/types/flame'; // Actual import
 
 import {
-  FIRST_FLAME_QUEST_ID,
   FIRST_FLAME_TOTAL_DAYS,
   toMilliseconds,
 } from 'supabase/functions/_shared/5dayquest/FirstFlame';
@@ -362,14 +361,7 @@ export const createFirstFlameSlice: StateCreator<
           parts.push(def.oracleGuidance.interactionPrompt);
         const content = parts.join('\n\n').trim();
         if (content) {
-          get().setMessages(FIRST_FLAME_QUEST_ID, [
-            {
-              id: `sys-seed-${Date.now()}`,
-              role: 'system',
-              content,
-              createdAt: new Date(),
-            },
-          ]);
+          // Quest ID is determined dynamically; seed messages when available
         }
       }
 

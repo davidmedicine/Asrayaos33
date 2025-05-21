@@ -4,7 +4,6 @@ import type { ReadonlyDeep } from 'type-fest';
  | 1 · Public constants                                          |
  *--------------------------------------------------------------*/
 export const FIRST_FLAME_SLUG       = 'first-flame-ritual' as const;
-export const FIRST_FLAME_QUEST_ID   = FIRST_FLAME_SLUG;
 export const FIRST_FLAME_TOTAL_DAYS = 5 as const;
 
 /*--------------------------------------------------------------*

@@ -576,12 +576,11 @@ export async function fetchFlameStatus(): Promise<FlameStatusResponse> {
     throw error ?? new Error('User not authenticated');
   }
   const user_id = user.id;
-  const quest_id = FIRST_FLAME_QUEST_ID;
   const flameSpirit = 'ember';
 
   const rawServerData = await invoke<unknown>('get-flame-status', {
     method: 'GET',
-    urlParams: { quest_id, user_id, flameSpirit },
+    urlParams: { user_id, flameSpirit },
   });
 
   if (rawServerData === null) {

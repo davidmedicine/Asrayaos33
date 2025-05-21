@@ -22,7 +22,6 @@ import type { RitualStage as LocalRitualStage, RitualDayNumber as LocalRitualDay
 
 /** 🚩 1. Core Identifiers & Configuration */
 export const FIRST_FLAME_SLUG = 'first-flame-ritual' as const;
-export const FIRST_FLAME_QUEST_ID = FIRST_FLAME_SLUG;
 export const FIRST_FLAME_TOTAL_DAYS = 5 as const;
 
 /** 🚩 2. ISO-Timestamp Helpers (Branded Type) */
