@@ -18,6 +18,7 @@ function requireEnv(key: string): string {
 /*────────────────────  Mandatory configuration  ─────────────────────*/
 const MODAL_KICK_URL   = requireEnv('MODAL_KICK_URL');              // string
 const SUPABASE_RPC_URL = requireEnv('SUPABASE_RPC_BROADCAST_URL');  // string
+const SUPABASE_INSERT_DAY1_URL = requireEnv('SUPABASE_RPC_INSERT_DAY1_URL');
 
 /*────────────────────  Shared Axios client  ─────────────────────────*/
 const http = axios.create({
@@ -39,6 +40,23 @@ export async function ensureFlameState(userId: string): Promise<void> {
     const e = err as AxiosError;
     throw new Error(
       `[ensureFlameState] Modal request failed – ${e.message} ` +
+        `(status ${e.response?.status ?? 'n/a'})`,
+    );
+  }
+}
+
+/**
+ * insertDayOneMessages
+ * --------------------------------
+ * Inserts canned Day-1 system & prompt messages for the user.
+ */
+export async function insertDayOneMessages(userId: string): Promise<void> {
+  try {
+    await http.post(SUPABASE_INSERT_DAY1_URL, { user_id: userId });
+  } catch (err) {
+    const e = err as AxiosError;
+    throw new Error(
+      `[insertDayOneMessages] Supabase Edge Function failed – ${e.message} ` +
         `(status ${e.response?.status ?? 'n/a'})`,
     );
   }

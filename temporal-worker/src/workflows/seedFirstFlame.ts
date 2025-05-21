@@ -13,11 +13,12 @@ export const seedFirstFlameSignal = wf.defineSignal<[SeedFirstFlameInput]>(
 );
 
 /** -------- Activity proxies --------
- *  • `ensureFlameState` – creates / validates DB rows in Supabase
- *  • `broadcastReady`   – sends realtime ready event
+ *  • `ensureFlameState`    – creates / validates DB rows in Supabase
+ *  • `insertDayOneMessages` – seeds Day‑1 prompt messages
+ *  • `broadcastReady`      – sends realtime ready event
  *  Edit the timeout / retry settings per Activity as you refine them.
  */
-const { ensureFlameState, broadcastReady } = wf.proxyActivities<
+const { ensureFlameState, insertDayOneMessages, broadcastReady } = wf.proxyActivities<
   typeof act
 >({
   startToCloseTimeout: '1 minute',
@@ -31,6 +32,9 @@ export async function seedFirstFlame(
   // 1) Guarantee quest-state exists
   await ensureFlameState(input.userId);
 
-  // 2) Tell the front-end it can refetch
+  // 2) Insert Day‑1 system + prompt messages
+  await insertDayOneMessages(input.userId);
+
+  // 3) Tell the front-end it can refetch
   await broadcastReady(input.userId);
 }
