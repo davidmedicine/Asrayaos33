@@ -13,21 +13,30 @@ const json = (data: unknown, status = 200): Response =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 
+const safeJson = async (r: Request) => {
+  try {
+    const text = await r.text()
+    if (!text) return null
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   const authHdr = req.headers.get('Authorization') ?? ''
   if (!authHdr.startsWith('Bearer ')) return json({ error: 'AUTH' }, 401)
 
-  let quest_id: string | undefined
-  let day_number: number | undefined
-  try {
-    ({ quest_id, day_number } = await req.json())
-  } catch {
-    return json({ error: 'BAD_REQUEST' }, 400)
-  }
-  if (!quest_id || typeof day_number !== 'number')
-    return json({ error: 'BAD_REQUEST' }, 400)
+  const reqJson   = req.method === 'POST' ? await safeJson(req) : null
+  const urlParams = new URL(req.url).searchParams
+  const questId   = reqJson?.quest_id   ?? urlParams.get('quest_id')
+  const userId    = reqJson?.user_id    ?? urlParams.get('user_id')
+  const dayNumber = reqJson?.day_number ?? urlParams.get('day_number')
+
+  if (!questId || !userId || dayNumber == null)
+    return new Response('quest_id, user_id, day_number required', { status: 400 })
 
   const sbUser = createClient(SB_URL, SB_ANON, {
     global: { headers: { Authorization: authHdr } },
@@ -42,12 +51,10 @@ Deno.serve(async (req) => {
   const { data: { user }, error: userErr } = await sbUser.auth.getUser()
   if (userErr || !user?.id) return json({ error: 'AUTH' }, 401)
 
-  const user_id = user.id
-
   const { data: row, error: rowErr } = await sbUser
     .from('v_flame_state_legacy')
     .select('status, progress, payload')
-    .match({ quest_id, user_id, day_number })
+    .match({ quest_id: questId, user_id: userId, day_number: Number(dayNumber) })
     .single()
 
   if (rowErr) {
@@ -58,7 +65,7 @@ Deno.serve(async (req) => {
   if (!row) {
     try {
       await sbAdmin.functions.invoke('realtime-broadcast', {
-        body: { channel: 'flame_status', event: 'missing', payload: { user_id, quest_id, day_number } },
+        body: { channel: 'flame_status', event: 'missing', payload: { user_id: userId, quest_id: questId, day_number: Number(dayNumber) } },
       })
     } catch (err) {
       console.error('[get-flame-status] broadcast error', err)
@@ -70,7 +77,7 @@ Deno.serve(async (req) => {
   if (row.status === 'pending') {
     try {
       await sbAdmin.functions.invoke('realtime-broadcast', {
-        body: { channel: 'flame_status', event: 'processing', payload: { user_id, quest_id, day_number } },
+        body: { channel: 'flame_status', event: 'processing', payload: { user_id: userId, quest_id: questId, day_number: Number(dayNumber) } },
       })
     } catch (err) {
       console.error('[get-flame-status] broadcast error', err)
