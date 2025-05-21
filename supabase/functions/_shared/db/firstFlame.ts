@@ -38,6 +38,40 @@ interface UpsertQuestPayload {
 }
 
 /**
+ * ensureFirstFlameQuest
+ * -----------------------------------------------------
+ * Guarantee a minimal quest row exists for the First Flame ritual.
+ * It checks for an existing row by slug and inserts a default one if absent.
+ * Only the quest `id` and `slug` fields are returned.
+ */
+export async function ensureFirstFlameQuest(
+  sbAdmin: SupabaseClient,
+): Promise<{ id: string; slug: string }> {
+  const selectCols = 'id, slug'
+
+  const { data: existing, error } = await sbAdmin
+    .from('quests')
+    .select(selectCols)
+    .eq('slug', FIRST_FLAME_SLUG)
+    .maybeSingle<{ id: string; slug: string }>()
+
+  if (error) throw error
+  if (existing) return existing
+
+  const { data: inserted, error: insertErr } = await sbAdmin
+    .from('quests')
+    .insert({ slug: FIRST_FLAME_SLUG, title: 'First Flame Ritual', type: 'ritual' })
+    .select(selectCols)
+    .single<{ id: string; slug: string }>()
+
+  if (insertErr || !inserted) {
+    throw insertErr ?? new Error('Failed to insert first flame quest')
+  }
+
+  return inserted
+}
+
+/**
  * Idempotently loads or creates the 'First-Flame' quest using its predefined slug.
  * This version uses a "read-first, then write-if-missing" approach.
  * It returns only the essential 'id', 'slug', 'title', and 'type' of the quest.
