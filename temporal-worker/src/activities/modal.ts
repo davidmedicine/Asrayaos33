@@ -7,6 +7,7 @@
 //                        realtime  `flame_status:ready`  broadcast.
 // ────────────────────────────────────────────────────────────
 import axios, { AxiosError } from 'axios';
+import { Context } from '@temporalio/activity';
 
 /*────────────────────  Helper to assert env-vars  ────────────────────*/
 function requireEnv(key: string): string {
@@ -39,6 +40,7 @@ export interface FlameActivityParams {
 }
 
 export async function ensureFlameState({ userId, questId }: FlameActivityParams): Promise<void> {
+  const hb = setInterval(() => Context.current().heartbeat(), 20_000);
   try {
     await http.post(MODAL_KICK_URL, { user_id: userId, quest_id: questId });
   } catch (err) {
@@ -47,6 +49,8 @@ export async function ensureFlameState({ userId, questId }: FlameActivityParams)
       `[ensureFlameState] Modal request failed – ${e.message} ` +
         `(status ${e.response?.status ?? 'n/a'})`,
     );
+  } finally {
+    clearInterval(hb);
   }
 }
 
@@ -56,6 +60,7 @@ export async function ensureFlameState({ userId, questId }: FlameActivityParams)
  * Inserts canned Day-1 system & prompt messages for the user.
  */
 export async function insertDayOneMessages({ userId, questId }: FlameActivityParams): Promise<void> {
+  const hb = setInterval(() => Context.current().heartbeat(), 20_000);
   try {
     await http.post(SUPABASE_INSERT_DAY1_URL, { user_id: userId, quest_id: questId });
   } catch (err) {
@@ -64,6 +69,8 @@ export async function insertDayOneMessages({ userId, questId }: FlameActivityPar
       `[insertDayOneMessages] Supabase Edge Function failed – ${e.message} ` +
         `(status ${e.response?.status ?? 'n/a'})`,
     );
+  } finally {
+    clearInterval(hb);
   }
 }
 
@@ -73,6 +80,7 @@ export async function insertDayOneMessages({ userId, questId }: FlameActivityPar
  * Emits `flame_status:ready` so the UI knows to refetch ritual data.
  */
 export async function broadcastReady({ userId, questId }: FlameActivityParams): Promise<void> {
+  const hb = setInterval(() => Context.current().heartbeat(), 20_000);
   try {
     await http.post(SUPABASE_RPC_URL, {
       channel: 'flame_status',
@@ -85,5 +93,7 @@ export async function broadcastReady({ userId, questId }: FlameActivityParams): 
       `[broadcastReady] Supabase Edge Function failed – ${e.message} ` +
         `(status ${e.response?.status ?? 'n/a'})`,
     );
+  } finally {
+    clearInterval(hb);
   }
 }
