@@ -197,16 +197,17 @@ export const useUnifiedChatPanelData = ({
   const maybeRedirectToRitualDayOne = useCallback(async () => {
     if (!userId) return;
     try {
-      // try-catch added by diff
-      const data = await qc.fetchQuery(buildFlameStatusQueryOpts(userId));
-      if (data.overallProgress?.current_day_target === 1) {
-        router.replace(AppRoutes.RitualDayOne);
-        announceToSR("Navigating to First Flame – Day 1", {
-          politeness: "assertive",
-        });
-      }
+      const { overallProgress } = await qc.fetchQuery(
+        buildFlameStatusQueryOpts(userId),
+      );
+      if (!overallProgress) return;
+      if (overallProgress.current_day_target !== 1) return;
+
+      router.replace(AppRoutes.RitualDayOne);
+      announceToSR("Navigating to First Flame – Day 1", {
+        politeness: "assertive",
+      });
     } catch (error) {
-      // catch block added by diff
       if (!(error instanceof SilentError)) {
         console.error("Failed to fetch flame status for redirect:", error);
       }
@@ -214,34 +215,15 @@ export const useUnifiedChatPanelData = ({
   }, [qc, router, userId]);
 
   const selectQuestSafely = useCallback(
-    // Function signature and logic changed by diff
-    async (questId: string | null): Promise<void> => {
-      if (!questId) {
-        setActiveQuestId(null);
-        return;
-      }
-      const questToSelect = questsArray.find((q) => q.id === questId);
-      if (!questToSelect) {
-        console.warn(`Quest with id ${questId} not found for selection.`); // Added by diff
-        return;
-      }
+    async (id: string | null) => {
+      if (!id) return setActiveQuestId(null);
+      const quest = questsArray.find((q) => q.id === id);
+      if (!quest) return;
 
-      startTransition(() => {
-        setActiveQuestId(questId); // Was selectQuest(id)
-        announceToSR(`Selected ${questToSelect.name}.`); // Was quest.name
-      });
-
-      if (questToSelect.isFirstFlameRitual) {
-        // Was quest.isFirstFlameRitual
-        await maybeRedirectToRitualDayOne();
-      }
+      startTransition(() => setActiveQuestId(id));
+      if (quest.isFirstFlameRitual) await maybeRedirectToRitualDayOne();
     },
-    [
-      questsArray,
-      setActiveQuestId,
-      startTransition,
-      maybeRedirectToRitualDayOne,
-    ],
+    [questsArray, setActiveQuestId, maybeRedirectToRitualDayOne],
   );
 
   const handleRetryLoad = useCallback(() => {
