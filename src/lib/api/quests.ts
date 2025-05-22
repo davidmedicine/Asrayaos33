@@ -1,20 +1,20 @@
 /* --------------------------------------------------------------------------
-*  src/lib/api/quests.ts
-*
-*  Thin, fully-typed wrappers around Supabase Edge Functions that power the
-*  Quest UI and the “First-Flame Ritual” flow.
-*
-*  Key improvements
-*    – explicit GET/POST so the Edge runtime sees the right verb
-*    – single generic invoke<T>() helper with robust error bubbling
-*    – richer console context for debugging
-*    – no silent “undefined” returns: every wrapper either throws or returns
-*    - dataVersion handling for GET requests to support slice hydration guards
-*    - React-Query helpers with pre-invalidation and prefetching
-*    - Zod validation for key API responses
-*    - Specific error types for better control flow (e.g., ProcessingError)
-*  Last Modified: 2024-07-17 (Incorporated diff and ultra-hard review)
-* ------------------------------------------------------------------------ */
+ *  src/lib/api/quests.ts
+ *
+ *  Thin, fully-typed wrappers around Supabase Edge Functions that power the
+ *  Quest UI and the “First-Flame Ritual” flow.
+ *
+ *  Key improvements
+ *    – explicit GET/POST so the Edge runtime sees the right verb
+ *    – single generic invoke<T>() helper with robust error bubbling
+ *    – richer console context for debugging
+ *    – no silent “undefined” returns: every wrapper either throws or returns
+ *    - dataVersion handling for GET requests to support slice hydration guards
+ *    - React-Query helpers with pre-invalidation and prefetching
+ *    - Zod validation for key API responses
+ *    - Specific error types for better control flow (e.g., ProcessingError)
+ *  Last Modified: 2024-07-17 (Incorporated diff and ultra-hard review)
+ * ------------------------------------------------------------------------ */
 
 import {
   FunctionsFetchError,
@@ -23,11 +23,15 @@ import {
 } from "@supabase/supabase-js";
 import type { QueryClient, UseQueryOptions } from "@tanstack/react-query";
 import type { Message as VercelMessage } from "ai/react"; // From original file structure
-import { z } from 'zod';
+import { z } from "zod";
 
 import { supabase } from "@/lib/supabase_client/client";
-import { progressFromStatus } from './progressFromStatus';
-import { FIRST_FLAME_QUEST_ID } from '@flame';
+import { progressFromStatus } from "./progressFromStatus";
+import {
+  FIRST_FLAME_QUERY_KEY,
+  FIRST_FLAME_QUEST_ID,
+  isFirstFlame,
+} from "@flame";
 import type {
   FlameImprintServer,
   FlameProgressDayServer,
@@ -40,66 +44,75 @@ import type {
 // (These would ideally be co-located with their respective type definitions or in a dedicated zod schema file)
 
 // Basic ISO8601 DateTime string schema
-const zTimestampISO = z.string().datetime({ offset: true }).brand<'ISO8601DateTime'>();
+const zTimestampISO = z
+  .string()
+  .datetime({ offset: true })
+  .brand<"ISO8601DateTime">();
 
-const zFlameProgressDayServer = z.object({
-  day: z.number().int().min(1),
-  completed: z.boolean(),
-  timestamp: zTimestampISO.optional().nullable(), // Assuming timestamp can be null or undefined
-  // Example additional fields:
-  // reflection: z.string().optional().nullable(),
-  // imprintsCount: z.number().int().optional(),
-}).passthrough(); // Use passthrough if FlameProgressDayServer has more fields not strictly validated here
+const zFlameProgressDayServer = z
+  .object({
+    day: z.number().int().min(1),
+    completed: z.boolean(),
+    timestamp: zTimestampISO.optional().nullable(), // Assuming timestamp can be null or undefined
+    // Example additional fields:
+    // reflection: z.string().optional().nullable(),
+    // imprintsCount: z.number().int().optional(),
+  })
+  .passthrough(); // Use passthrough if FlameProgressDayServer has more fields not strictly validated here
 
-const zFlameImprintServer = z.object({
-  id: z.string().uuid(),
-  day: z.number().int().min(1),
-  type: z.enum(['text', 'image', 'audio', 'video', 'reflection']), // Example enum, adjust as needed
-  payloadText: z.string().optional().nullable(),
-  payloadBlobRef: z.string().optional().nullable(),
-  timestamp: zTimestampISO,
-  clientGeneratedId: z.string().uuid().optional(),
-  // Example additional fields:
-  // uploadedAt: zTimestampISO.optional().nullable(),
-  // processedAt: zTimestampISO.optional().nullable(),
-}).passthrough(); // Use passthrough if FlameImprintServer has more fields
+const zFlameImprintServer = z
+  .object({
+    id: z.string().uuid(),
+    day: z.number().int().min(1),
+    type: z.enum(["text", "image", "audio", "video", "reflection"]), // Example enum, adjust as needed
+    payloadText: z.string().optional().nullable(),
+    payloadBlobRef: z.string().optional().nullable(),
+    timestamp: zTimestampISO,
+    clientGeneratedId: z.string().uuid().optional(),
+    // Example additional fields:
+    // uploadedAt: zTimestampISO.optional().nullable(),
+    // processedAt: zTimestampISO.optional().nullable(),
+  })
+  .passthrough(); // Use passthrough if FlameImprintServer has more fields
 
 /**
  * Zod schema for parsing the raw response from 'get-flame-status' Edge Function.
  * This type represents what the server sends, which might indicate processing.
  */
-export const zFlameStatusServerResponse = z.object({
-  processing: z.boolean(),
-  dataVersion: z.number().int().optional(),        // Required if processing is false
-  currentDay: z.number().int().min(0).optional(),  // Required if processing is false
-  totalDays: z.number().int().min(1).optional(),   // Required if processing is false
-  ritualStartDate: zTimestampISO.nullable().optional(), // Required if processing is false (can be null)
-  progress: z.array(zFlameProgressDayServer).optional(), // Required if processing is false
-  imprints: z.array(zFlameImprintServer).optional(),   // Required if processing is false
-  // Add any other known properties from FlameStatusPayload, marking as optional
-  // For example:
-  // ritualCompleted: z.boolean().optional(),
-  // nextDayUnlockTime: zTimestampISO.nullable().optional(),
-}).passthrough();
-export type FlameStatusServerResponse = z.infer<typeof zFlameStatusServerResponse>;
-
+export const zFlameStatusServerResponse = z
+  .object({
+    processing: z.boolean(),
+    dataVersion: z.number().int().optional(), // Required if processing is false
+    currentDay: z.number().int().min(0).optional(), // Required if processing is false
+    totalDays: z.number().int().min(1).optional(), // Required if processing is false
+    ritualStartDate: zTimestampISO.nullable().optional(), // Required if processing is false (can be null)
+    progress: z.array(zFlameProgressDayServer).optional(), // Required if processing is false
+    imprints: z.array(zFlameImprintServer).optional(), // Required if processing is false
+    // Add any other known properties from FlameStatusPayload, marking as optional
+    // For example:
+    // ritualCompleted: z.boolean().optional(),
+    // nextDayUnlockTime: zTimestampISO.nullable().optional(),
+  })
+  .passthrough();
+export type FlameStatusServerResponse = z.infer<
+  typeof zFlameStatusServerResponse
+>;
 
 /* -------------------------------------------------------------------------- */
 /* 1. Constants & Types                                                     */
 /* -------------------------------------------------------------------------- */
 
-export const FIRST_FLAME_SLUG = "first-flame-ritual";
 const BG_SYNC_SUBMIT_IMPRINT_TAG_PREFIX = "submit-flame-imprint-sync:";
 
 /** Edge Function error codes shared across clients, returned in response body. */
 export enum EdgeErrorCode {
-  AUTH = 'AUTH_ERROR',
-  DB = 'DB_ERROR',
-  STORAGE = 'STORAGE_ERROR',
-  METHOD_NOT_ALLOWED = 'METHOD_NOT_ALLOWED',
-  SERVER_ERROR = 'INTERNAL_SERVER_ERROR',
-  VALIDATION_ERROR = 'VALIDATION_ERROR',
-  NOT_FOUND = 'NOT_FOUND',
+  AUTH = "AUTH_ERROR",
+  DB = "DB_ERROR",
+  STORAGE = "STORAGE_ERROR",
+  METHOD_NOT_ALLOWED = "METHOD_NOT_ALLOWED",
+  SERVER_ERROR = "INTERNAL_SERVER_ERROR",
+  VALIDATION_ERROR = "VALIDATION_ERROR",
+  NOT_FOUND = "NOT_FOUND",
   // Add more specific error codes as needed
 }
 
@@ -125,13 +138,14 @@ export class NetworkError extends Error {
  */
 export class ProcessingError extends Error {
   public readonly processing = true;
-  constructor(message = "Data is currently processing. Please try again shortly.") {
+  constructor(
+    message = "Data is currently processing. Please try again shortly.",
+  ) {
     super(message);
     this.name = "ProcessingError";
     Object.setPrototypeOf(this, ProcessingError.prototype);
   }
 }
-
 
 export interface QuestPayloadFromServer {
   id: string;
@@ -149,21 +163,23 @@ export interface QuestPayloadFromServer {
   isFirstFlameRitual?: boolean; // Added client-side
 }
 
-export const zQuestPayloadFromServer = z.object({
-  id: z.string().uuid(),
-  slug: z.string(),
-  name: z.string(),
-  type: z.string(), // Consider z.enum(['chat', 'ritual', ...]) if types are fixed
-  timestamp: zTimestampISO,
-  createdAt: zTimestampISO.optional(),
-  lastMessagePreview: z.string(),
-  unreadCount: z.number().int().nonnegative(),
-  agentId: z.string().uuid().nullable().optional(), // Assuming agentId is a UUID
-  realm: z.string().nullable().optional(),
-  isPinned: z.boolean(),
-  communityId: z.string().uuid().nullable().optional(), // Assuming communityId is a UUID
-  isFirstFlameRitual: z.boolean().optional(), // Will be set client-side
-}).passthrough();
+export const zQuestPayloadFromServer = z
+  .object({
+    id: z.string().uuid(),
+    slug: z.string(),
+    name: z.string(),
+    type: z.string(), // Consider z.enum(['chat', 'ritual', ...]) if types are fixed
+    timestamp: zTimestampISO,
+    createdAt: zTimestampISO.optional(),
+    lastMessagePreview: z.string(),
+    unreadCount: z.number().int().nonnegative(),
+    agentId: z.string().uuid().nullable().optional(), // Assuming agentId is a UUID
+    realm: z.string().nullable().optional(),
+    isPinned: z.boolean(),
+    communityId: z.string().uuid().nullable().optional(), // Assuming communityId is a UUID
+    isFirstFlameRitual: z.boolean().optional(), // Will be set client-side
+  })
+  .passthrough();
 
 export interface ListQuestsResponse {
   data: QuestPayloadFromServer[];
@@ -176,7 +192,6 @@ export const zListQuestsResponse = z.object({
   serverTimestamp: zTimestampISO,
   error: z.nativeEnum(EdgeErrorCode).optional(),
 });
-
 
 /**
  * Represents the successful response from the `submit-flame-imprint` Edge Function.
@@ -194,7 +209,6 @@ export const zSubmitImprintSuccessResponse = z.object({
   progress: zFlameProgressDayServer,
   dataVersion: z.number().int(),
 });
-
 
 /**
  * Represents the possible outcomes of `api.submitImprint`.
@@ -261,7 +275,6 @@ type InvokeOptions = Omit<
   urlParams?: Record<string, string | number | boolean | null | undefined>;
 };
 
-
 /**
  * DRY wrapper around supabase.functions.invoke with improved error handling,
  * logging, and method specification.
@@ -279,23 +292,23 @@ async function invoke<TData>(
 ): Promise<TData> {
   const resolvedMethod = options.method ?? (options.body ? "POST" : "GET");
 
-  if (resolvedMethod === 'GET' && options.body) {
+  if (resolvedMethod === "GET" && options.body) {
     const msg = `[EdgeInvoke] FATAL: GET request to '${functionName}' must not include a body. Supabase JS client might convert this to POST, leading to unexpected behavior.`;
     console.error(msg, { options });
     // Throw an error because this is a programming mistake.
-    throw new TypeError(msg.replace('[EdgeInvoke] FATAL: ', ''));
+    throw new TypeError(msg.replace("[EdgeInvoke] FATAL: ", ""));
   }
 
   if (process.env.NODE_ENV !== "production") {
     const bodySummary = options.body
-      ? typeof options.body === 'string'
+      ? typeof options.body === "string"
         ? `string[${options.body.length}]`
         : options.body instanceof FormData
-        ? 'FormData'
-        : typeof options.body === 'object'
-        ? 'object' // Could log keys if safe: Object.keys(options.body).join(', ')
-        : 'other'
-      : 'empty';
+          ? "FormData"
+          : typeof options.body === "object"
+            ? "object" // Could log keys if safe: Object.keys(options.body).join(', ')
+            : "other"
+      : "empty";
 
     const maskedHeaders = options.headers ? { ...options.headers } : {};
     if (
@@ -304,7 +317,8 @@ async function invoke<TData>(
       maskedHeaders.Authorization.startsWith("Bearer ")
     ) {
       const tokenParts = maskedHeaders.Authorization.substring(7).split(".");
-      if (tokenParts.length === 3) { // Basic JWT structure (header.payload.signature)
+      if (tokenParts.length === 3) {
+        // Basic JWT structure (header.payload.signature)
         maskedHeaders.Authorization = `Bearer ${tokenParts[0].substring(0, Math.min(2, tokenParts[0].length))}...[REDACTED_JWT_PAYLOAD]...${tokenParts[2].substring(tokenParts[2].length - Math.min(2, tokenParts[2].length))}`;
       } else {
         maskedHeaders.Authorization = `Bearer [REDACTED_TOKEN]`;
@@ -318,14 +332,19 @@ async function invoke<TData>(
   }
 
   try {
-    const { urlParams, query, ...rest } = options as InvokeOptions & { query?: Record<string, string> };
+    const { urlParams, query, ...rest } = options as InvokeOptions & {
+      query?: Record<string, string>;
+    };
 
     // Merge urlParams into the existing `query` option, coercing values to strings
     const mergedQuery = {
       ...(query ?? {}),
       ...(urlParams
         ? Object.fromEntries(
-            Object.entries(urlParams).map(([k, v]) => [k, v === undefined || v === null ? '' : String(v)])
+            Object.entries(urlParams).map(([k, v]) => [
+              k,
+              v === undefined || v === null ? "" : String(v),
+            ]),
           )
         : {}),
     };
@@ -341,13 +360,14 @@ async function invoke<TData>(
           // Set Content-Type to application/json only if body is a plain object
           // and not FormData, URLSearchParams, Blob, or ReadableStream which have their own Content-Types.
           ...(options.body &&
-            typeof options.body === 'object' &&
+            typeof options.body === "object" &&
             !(options.body instanceof FormData) &&
             !(options.body instanceof URLSearchParams) &&
             !(options.body instanceof Blob) && // Blob often implies a specific content type
             !(options.body instanceof ArrayBuffer) &&
-            !(options.body instanceof ReadableStream) &&
-            { "Content-Type": "application/json" }),
+            !(options.body instanceof ReadableStream) && {
+              "Content-Type": "application/json",
+            }),
           ...options.headers,
         },
       },
@@ -364,7 +384,6 @@ async function invoke<TData>(
     // The type TData should accurately reflect what the Edge Function returns and what supabase-js provides.
     // For our specific use case in fetchQuestList, we will handle string parsing manually if needed.
     return data as TData; // The caller will handle type assertions or checks if TData is `unknown` or `any`.
-
   } catch (err: unknown) {
     const errorContext = {
       functionName,
@@ -400,7 +419,8 @@ async function invoke<TData>(
         err, // `cause`
       );
     }
-    if (err instanceof Error) { // Rethrow other standard JavaScript errors
+    if (err instanceof Error) {
+      // Rethrow other standard JavaScript errors
       throw err;
     }
     // Fallback for unknown error types
@@ -426,9 +446,10 @@ async function decodeStorageObject(data: unknown): Promise<string> {
   if (data instanceof Blob) {
     return data.text();
   }
-  throw new TypeError('Unsupported type for decodeStorageObject. Expected Blob, Uint8Array, or ArrayBuffer.');
+  throw new TypeError(
+    "Unsupported type for decodeStorageObject. Expected Blob, Uint8Array, or ArrayBuffer.",
+  );
 }
-
 
 /* -------------------------------------------------------------------------- */
 /* 4. Quests API                                                              */
@@ -449,11 +470,15 @@ export async function fetchQuestList(): Promise<ListQuestsResponse> {
   let dataToParse: unknown = rawResponse;
 
   // TODO: remove fallback once Edge function sends JSON header
-  if (typeof rawResponse === 'string') {
+  if (typeof rawResponse === "string") {
     if (process.env.NODE_ENV !== "production") {
       console.warn(
         "[API] fetchQuestList: Received string response, attempting JSON.parse. This is a temporary fallback.",
-        { responsePreview: rawResponse.substring(0, 100) + (rawResponse.length > 100 ? '...' : '') }
+        {
+          responsePreview:
+            rawResponse.substring(0, 100) +
+            (rawResponse.length > 100 ? "..." : ""),
+        },
       );
     }
     try {
@@ -463,35 +488,51 @@ export async function fetchQuestList(): Promise<ListQuestsResponse> {
       console.error(`[API] fetchQuestList: ${parseErrorMessage}`, {
         originalError: e instanceof Error ? e.message : String(e),
         // Avoid logging potentially large rawResponse in production for errors.
-        rawResponsePreview: process.env.NODE_ENV !== "production" ? (rawResponse.substring(0, 500) + (rawResponse.length > 500 ? '...' : '')) : "Omitted in prod",
+        rawResponsePreview:
+          process.env.NODE_ENV !== "production"
+            ? rawResponse.substring(0, 500) +
+              (rawResponse.length > 500 ? "..." : "")
+            : "Omitted in prod",
       });
       // Throw an error to prevent further processing with malformed data.
-      throw new Error(`${parseErrorMessage}${e instanceof Error ? ` Details: ${e.message}` : ''}`);
+      throw new Error(
+        `${parseErrorMessage}${e instanceof Error ? ` Details: ${e.message}` : ""}`,
+      );
     }
   }
 
   const parsedResult = zListQuestsResponse.safeParse(dataToParse);
 
   if (!parsedResult.success) {
-    console.error("[API] fetchQuestList: Failed to validate response with Zod:", parsedResult.error.flatten());
+    console.error(
+      "[API] fetchQuestList: Failed to validate response with Zod:",
+      parsedResult.error.flatten(),
+    );
     // Log the data that failed parsing only in dev/staging to avoid exposing sensitive data in prod logs
     if (process.env.NODE_ENV !== "production") {
-        console.error("[API] fetchQuestList: Data that failed Zod validation:", dataToParse);
+      console.error(
+        "[API] fetchQuestList: Data that failed Zod validation:",
+        dataToParse,
+      );
     }
-    throw new Error(`Failed to parse quest list response. Issues: ${parsedResult.error.message}`);
+    throw new Error(
+      `Failed to parse quest list response. Issues: ${parsedResult.error.message}`,
+    );
   }
 
   const responseData = parsedResult.data;
 
   if (responseData.error) {
     // Handle server-side error codes reported in the response body
-    console.error(`[API] fetchQuestList: Server returned error code: ${responseData.error}`);
+    console.error(
+      `[API] fetchQuestList: Server returned error code: ${responseData.error}`,
+    );
     throw new Error(`Error from list-quests: ${responseData.error}`);
   }
 
   const mappedQuests = responseData.data.map((q) => ({
     ...q,
-    isFirstFlameRitual: q.slug === FIRST_FLAME_SLUG,
+    isFirstFlameRitual: isFirstFlame(q),
   }));
 
   return {
@@ -499,7 +540,6 @@ export async function fetchQuestList(): Promise<ListQuestsResponse> {
     serverTimestamp: responseData.serverTimestamp,
   };
 }
-
 
 /**
  * Creates a new quest.
@@ -527,16 +567,23 @@ export async function createQuest(
   // the same string parsing logic from fetchQuestList would be needed here.
   const parsedNewQuest = zQuestPayloadFromServer.safeParse(rawNewQuest);
   if (!parsedNewQuest.success) {
-    console.error("[API] createQuest: Failed to parse response:", parsedNewQuest.error.flatten());
+    console.error(
+      "[API] createQuest: Failed to parse response:",
+      parsedNewQuest.error.flatten(),
+    );
     if (process.env.NODE_ENV !== "production") {
-        console.error("[API] createQuest: Data that failed Zod validation:", rawNewQuest);
+      console.error(
+        "[API] createQuest: Data that failed Zod validation:",
+        rawNewQuest,
+      );
     }
-    throw new Error(`Failed to parse create-quest response. Issues: ${parsedNewQuest.error.message}`);
+    throw new Error(
+      `Failed to parse create-quest response. Issues: ${parsedNewQuest.error.message}`,
+    );
   }
   const newQuest = parsedNewQuest.data;
 
-
-  if (newQuest.slug === FIRST_FLAME_SLUG) {
+  if (isFirstFlame(newQuest)) {
     await invalidateFlameStatusQueries(queryClient);
     await prefetchFlameStatus(queryClient, newQuest.id, uid);
   }
@@ -572,15 +619,18 @@ export async function fetchMessages(
  * @returns A promise resolving to a `FlameStatusResponse`.
  */
 export async function fetchFlameStatus(): Promise<FlameStatusResponse> {
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
   if (error || !user?.id) {
-    throw error ?? new Error('User not authenticated');
+    throw error ?? new Error("User not authenticated");
   }
   const user_id = user.id;
-  const flameSpirit = 'ember';
+  const flameSpirit = "ember";
 
-  const rawServerData = await invoke<unknown>('get-flame-status', {
-    method: 'GET',
+  const rawServerData = await invoke<unknown>("get-flame-status", {
+    method: "GET",
     urlParams: { user_id, flameSpirit },
   });
 
@@ -593,40 +643,46 @@ export async function fetchFlameStatus(): Promise<FlameStatusResponse> {
   const parsedResult = zFlameStatusServerResponse.safeParse(rawServerData);
 
   if (!parsedResult.success) {
-    console.error("[API] fetchFlameStatus: Failed to parse response:", parsedResult.error.flatten());
+    console.error(
+      "[API] fetchFlameStatus: Failed to parse response:",
+      parsedResult.error.flatten(),
+    );
     if (process.env.NODE_ENV !== "production") {
-      console.error("[API] fetchFlameStatus: Data that failed Zod validation:", rawServerData);
+      console.error(
+        "[API] fetchFlameStatus: Data that failed Zod validation:",
+        rawServerData,
+      );
     }
     return { processing: true };
   }
   const serverResponse = parsedResult.data;
-
 
   if (serverResponse.processing) {
     return { processing: true };
   }
 
   if (
-    typeof serverResponse.dataVersion !== 'number' ||
-    typeof serverResponse.currentDay !== 'number' ||
-    typeof serverResponse.totalDays !== 'number' ||
+    typeof serverResponse.dataVersion !== "number" ||
+    typeof serverResponse.currentDay !== "number" ||
+    typeof serverResponse.totalDays !== "number" ||
     serverResponse.ritualStartDate === undefined ||
     !serverResponse.progress ||
     !serverResponse.imprints
   ) {
-    const errorMsg = '[API] fetchFlameStatus: Response is invalid - missing required fields when not processing.';
-    if (process.env.NODE_ENV !== 'production') {
+    const errorMsg =
+      "[API] fetchFlameStatus: Response is invalid - missing required fields when not processing.";
+    if (process.env.NODE_ENV !== "production") {
       console.error(errorMsg, { serverResponse });
     }
     return { processing: true };
   }
 
-  if (typeof (serverResponse as any).progress !== 'number') {
+  if (typeof (serverResponse as any).progress !== "number") {
     const derived = progressFromStatus({
       progress: serverResponse.progress as any,
       totalDays: serverResponse.totalDays,
     });
-    if (typeof derived === 'number') {
+    if (typeof derived === "number") {
       (serverResponse as any).progress = derived;
     }
   }
@@ -636,7 +692,6 @@ export async function fetchFlameStatus(): Promise<FlameStatusResponse> {
     ...serverResponse,
   } as FlameStatusResponse;
 }
-
 
 /**
  * Submits an imprint for a First Flame quest day.
@@ -664,27 +719,31 @@ export async function submitImprint(
 
   try {
     // Assuming submit-flame-imprint sends correct JSON headers.
-    const rawResult = await invoke<unknown>(
-      "submit-flame-imprint",
-      {
-        body: payload, // Default method will be POST due to body
-      },
-    );
+    const rawResult = await invoke<unknown>("submit-flame-imprint", {
+      body: payload, // Default method will be POST due to body
+    });
 
     // Note: If 'submit-flame-imprint' might also return a string due to missing headers,
     // the same string parsing logic from fetchQuestList would be needed here.
     const parsedResult = zSubmitImprintSuccessResponse.safeParse(rawResult);
     if (!parsedResult.success) {
-      console.error("[API] submitImprint: Failed to parse response:", parsedResult.error.flatten());
+      console.error(
+        "[API] submitImprint: Failed to parse response:",
+        parsedResult.error.flatten(),
+      );
       if (process.env.NODE_ENV !== "production") {
-        console.error("[API] submitImprint: Data that failed Zod validation:", rawResult);
+        console.error(
+          "[API] submitImprint: Data that failed Zod validation:",
+          rawResult,
+        );
       }
-      throw new Error(`Failed to parse submit-flame-imprint response. Issues: ${parsedResult.error.message}`);
+      throw new Error(
+        `Failed to parse submit-flame-imprint response. Issues: ${parsedResult.error.message}`,
+      );
     }
     const result = parsedResult.data;
 
     return { ...result, queued: false };
-
   } catch (error: unknown) {
     if (error instanceof NetworkError || error instanceof FunctionsFetchError) {
       if (process.env.NODE_ENV !== "production") {
@@ -726,11 +785,12 @@ export const FLAME_STATUS_QUERY_KEY = FLAME_STATUS_BASE_QUERY_KEY;
  * Type for flame status query keys. Can be global or user-specific.
  * Examples: ['flame-status'] or ['flame-status', 'user123']
  */
-type FlameStatusQueryKey = Readonly<(typeof FLAME_STATUS_BASE_QUERY_KEY[0] | string)[]>;
-
+type FlameStatusQueryKey =
+  | typeof FIRST_FLAME_QUERY_KEY
+  | readonly [...typeof FIRST_FLAME_QUERY_KEY, string];
 
 /** Query key for the user's quest list. */
-export const QUESTS_QUERY_KEY = ['list-quests'] as const;
+export const QUESTS_QUERY_KEY = ["list-quests"] as const;
 
 /**
  * Default options for `useQuery` hook when fetching flame status *without a specific user ID*.
@@ -741,18 +801,19 @@ export const QUESTS_QUERY_KEY = ['list-quests'] as const;
 export const defaultFlameStatusQueryOptions: UseQueryOptions<
   FlameStatusResponse, // Data type on success
   | FunctionsHttpError // Supabase HTTP error
-  | FunctionsRelayError  // Supabase Relay error
-  | FunctionsFetchError  // Supabase Fetch error (network layer before HTTP)
-  | NetworkError         // Custom network error (e.g., client offline)
-  | Error,               // Generic JS errors (includes Zod parsing errors from wrappers)
+  | FunctionsRelayError // Supabase Relay error
+  | FunctionsFetchError // Supabase Fetch error (network layer before HTTP)
+  | NetworkError // Custom network error (e.g., client offline)
+  | Error, // Generic JS errors (includes Zod parsing errors from wrappers)
   FlameStatusResponse, // Select data type (typically same as successful data)
-  Readonly<[typeof FLAME_STATUS_BASE_QUERY_KEY[0], string]> // Query key type for non-user-specific, now with questId
+  typeof FIRST_FLAME_QUERY_KEY
 > = {
-  queryKey: [...FLAME_STATUS_BASE_QUERY_KEY, FIRST_FLAME_QUEST_ID] as const, // include questId
+  queryKey: FIRST_FLAME_QUERY_KEY,
   queryFn: () => fetchFlameStatus(), // fetchFlameStatus no longer takes questId
   staleTime: 1000 * 60 * 5, // 5 minutes; adjust based on expected data volatility
   retry: false,
-  refetchInterval: (data) => (data && (data as any).processing === true ? 2000 : false),
+  refetchInterval: (data) =>
+    data && (data as any).processing === true ? 2000 : false,
 };
 
 /**
@@ -776,18 +837,18 @@ export function buildFlameStatusQueryOpts(
   FlameStatusQueryKey
 > {
   const queryKey = uid
-    ? [...FLAME_STATUS_BASE_QUERY_KEY, questId, uid] as const
-    : [...FLAME_STATUS_BASE_QUERY_KEY, questId] as const;
+    ? ([...FIRST_FLAME_QUERY_KEY, uid] as const)
+    : FIRST_FLAME_QUERY_KEY;
 
   return {
     queryKey: queryKey,
     queryFn: () => fetchFlameStatus(), // fetchFlameStatus no longer takes questId
     staleTime: 0,
     retry: false,
-    refetchInterval: (data) => (data && (data as any).processing === true ? 2000 : false),
+    refetchInterval: (data) =>
+      data && (data as any).processing === true ? 2000 : false,
   } as const;
 }
-
 
 /**
  * Invalidates all queries related to First Flame status (both global and user-specific)
@@ -797,7 +858,9 @@ export function buildFlameStatusQueryOpts(
 export async function invalidateFlameStatusQueries(
   queryClient: QueryClient,
 ): Promise<void> {
-  await queryClient.invalidateQueries({ queryKey: FLAME_STATUS_BASE_QUERY_KEY });
+  await queryClient.invalidateQueries({
+    queryKey: FLAME_STATUS_BASE_QUERY_KEY,
+  });
 }
 
 /**
@@ -830,7 +893,7 @@ export async function prefetchFlameStatus(
   } else {
     await queryClient.prefetchQuery({
       ...defaultFlameStatusQueryOptions,
-      queryKey: [...FLAME_STATUS_BASE_QUERY_KEY, questId] as const, // questId for key
+      queryKey: FIRST_FLAME_QUERY_KEY,
       queryFn: () => fetchFlameStatus(), // fetchFlameStatus no longer takes questId
     });
   }

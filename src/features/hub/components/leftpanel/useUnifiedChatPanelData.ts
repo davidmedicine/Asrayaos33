@@ -36,6 +36,7 @@ import {
 import { announceToSR } from "@/lib/accessibilityUtils";
 import { seedFirstFlame } from "@/lib/temporal_client"; // 🚩 Temporal client wrapper
 import { fetchQuestList } from "@/lib/api/quests"; // Added by diff
+import { FIRST_FLAME_QUERY_KEY } from "@flame";
 
 /* ---------- Types ---------- */
 export interface QuestPayloadFromServer {
@@ -64,10 +65,8 @@ export type QuestForListItemAugmented = Quest;
 /* ---------- Helpers ---------- */
 class SilentError extends Error {}
 // keyListQuests removed as per diff implication (usage replaced by QUESTS_QUERY_KEY)
-const keyFlameStatus = (uid?: string): QueryKey => [
-  "flame-status",
-  uid ?? "anon",
-];
+const keyFlameStatus = (uid?: string): QueryKey =>
+  uid ? [...FIRST_FLAME_QUERY_KEY, uid] : FIRST_FLAME_QUERY_KEY;
 
 const mapQuest = (row: QuestPayloadFromServer): Quest | null => {
   if (!row.id || !row.name || !row.slug) return null;
