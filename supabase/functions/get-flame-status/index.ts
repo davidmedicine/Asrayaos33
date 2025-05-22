@@ -5,17 +5,21 @@ import { corsHeaders } from "../_shared/cors.ts";
 import {
   FIRST_FLAME_SLUG,
   type RitualDayNumber,
+  LOG_STAGES,
 } from "../_shared/5dayquest/FirstFlame.ts";
 import { loadValidateAndCacheDayDef } from "../_shared/5dayquest/flame-data-loader.ts";
 import {
   getOrCreateFirstFlame,
   getOrCreateFirstFlameProgress,
 } from "../_shared/db/firstFlame.ts";
+import { log } from "../_shared/logger.ts";
 
 const FN = "get-flame-status";
 const SB_URL = Deno.env.get("SUPABASE_URL");
 const SB_ANON = Deno.env.get("SUPABASE_ANON_KEY");
 const SB_SVC = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const DEBUG =
+  Deno.env.get(`DEBUG_${FN.toUpperCase().replace(/-/g, '_')}`) === 'true';
 
 const json = (data: unknown, status = 200): Response =>
   new Response(JSON.stringify(data), {
@@ -63,9 +67,17 @@ Deno.serve(async (req) => {
 
     const overallProgress = progress ?? null;
     const day = (overallProgress?.current_day_target ?? 1) as RitualDayNumber;
-    const dayDefinition = await loadValidateAndCacheDayDef(day);
+
+    let dayDefinition = null;
+    try {
+      dayDefinition = await loadValidateAndCacheDayDef(day);
+    } catch {
+      log('WARN', LOG_STAGES.EF_GET_FLAME_STATUS_CACHE_MISS, null, FN, DEBUG);
+      return json({ processing: true, dataVersion: null }, 202);
+    }
 
     return json({
+      processing: false,
       dataVersion: Date.now(),
       overallProgress,
       dayDefinition,
