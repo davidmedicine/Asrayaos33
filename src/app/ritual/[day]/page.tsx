@@ -1,10 +1,10 @@
 // app/ritual/[day]/page.tsx
-import { notFound, redirect } from 'next/navigation';
-import { ViewTransition } from 'react'; // React 19
-import { useQuery } from '@tanstack/react-query';
-import { FlameStatusResponse } from '@flame'; // Changed from FlameStatusPayload
-import { fetchFlameStatus } from '@/lib/api/quests';
-import { FIRST_FLAME_QUEST_ID } from '@flame';
+import { notFound, redirect } from "next/navigation";
+import { ViewTransition } from "react"; // React 19
+import { useQuery } from "@tanstack/react-query";
+import { FlameStatusResponse } from "@flame"; // Changed from FlameStatusPayload
+import { fetchFlameStatus } from "@/lib/api/quests";
+import { FIRST_FLAME_SLUG } from "@flame";
 
 // Assuming FullPageSpinner, ErrorState, and DayLayout are defined elsewhere
 // For completeness, let's add dummy versions if they weren't part of the original snippet.
@@ -18,17 +18,22 @@ const DayLayout = ({ def, imprints }: { def: any; imprints: any }) => (
   </div>
 );
 
-
-export default function RitualDay({ params:{ day } }: { params: { day: string } }) { // Added type for params
-  const { data, isPending, error } = useQuery<FlameStatusResponse>({ // Explicitly typed useQuery
-    queryKey: ['flame-status', FIRST_FLAME_QUEST_ID],
-    queryFn : () => fetchFlameStatus(FIRST_FLAME_QUEST_ID),
+export default function RitualDay({
+  params: { day },
+}: {
+  params: { day: string };
+}) {
+  // Added type for params
+  const { data, isPending, error } = useQuery<FlameStatusResponse>({
+    // Explicitly typed useQuery
+    queryKey: ["flame-status", FIRST_FLAME_SLUG],
+    queryFn: () => fetchFlameStatus(FIRST_FLAME_SLUG),
     staleTime: 0,
-    placeholderData: previous => previous,
+    placeholderData: (previous) => previous,
   });
 
-  if (isPending) return <FullPageSpinner/>;
-  if (error)    return <ErrorState/>;
+  if (isPending) return <FullPageSpinner />;
+  if (error) return <ErrorState />;
 
   const target = data?.overallProgress?.current_day_target;
   // redirect forward/back if user is on the wrong day
@@ -46,7 +51,7 @@ export default function RitualDay({ params:{ day } }: { params: { day: string } 
 
   return (
     <ViewTransition name="ff-day-shell">
-      <DayLayout def={def} imprints={data.imprints}/>
+      <DayLayout def={def} imprints={data.imprints} />
     </ViewTransition>
   );
 }

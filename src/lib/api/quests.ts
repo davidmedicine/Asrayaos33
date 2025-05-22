@@ -27,7 +27,7 @@ import { z } from 'zod';
 
 import { supabase } from "@/lib/supabase_client/client";
 import { progressFromStatus } from './progressFromStatus';
-import { FIRST_FLAME_QUEST_ID } from '@flame';
+// using slug constant locally defined below
 import type {
   FlameImprintServer,
   FlameProgressDayServer,
@@ -748,7 +748,7 @@ export const defaultFlameStatusQueryOptions: UseQueryOptions<
   FlameStatusResponse, // Select data type (typically same as successful data)
   Readonly<[typeof FLAME_STATUS_BASE_QUERY_KEY[0], string]> // Query key type for non-user-specific, now with questId
 > = {
-  queryKey: [...FLAME_STATUS_BASE_QUERY_KEY, FIRST_FLAME_QUEST_ID] as const, // include questId
+  queryKey: [...FLAME_STATUS_BASE_QUERY_KEY, FIRST_FLAME_SLUG] as const, // include slug
   queryFn: () => fetchFlameStatus(), // fetchFlameStatus no longer takes questId
   staleTime: 1000 * 60 * 5, // 5 minutes; adjust based on expected data volatility
   retry: false,
