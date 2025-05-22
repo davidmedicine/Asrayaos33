@@ -24,7 +24,7 @@ import { fetchFlameStatus, FLAME_STATUS_QUERY_KEY } from '@/lib/api/quests';
 import { FIRST_FLAME_QUEST_ID } from '@flame';
 import { useBoundStore } from '@/lib/state/store';
 // FlameStatusResponse should contain `dataVersion: number` (or similar) for version comparison.
-import type { FlameStatusResponse } from '@flame';
+import type { FlameStatusResponse } from '@/types/flame';
 
 // Type for errors passed to the Zustand slice's setError action.
 // This allows UI to branch on error types (e.g., show specific messages for RLS).

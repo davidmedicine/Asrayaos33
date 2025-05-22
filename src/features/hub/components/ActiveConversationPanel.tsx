@@ -33,7 +33,8 @@ import { useContextStore } from '@/lib/state/slices/contextSlice';
 
 import type { Quest } from '@/types/quest';
 import type { ActiveConversationPanelProps } from './ActiveConversationPanel.types';
-import { FIRST_FLAME_SLUG, type FlameStatusResponse } from '@flame'; // Changed from FlameStatusPayload
+import { FIRST_FLAME_SLUG } from '@flame';
+import type { FlameStatusResponse } from '@/types/flame';
 
 import { fetchFlameStatus, invalidateFlameStatus } from '@/lib/api/quests';
 import { getPanelMeta } from '@/lib/core/panelMetaRegistry';

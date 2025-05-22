@@ -2,7 +2,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { ViewTransition } from 'react'; // React 19
 import { useQuery } from '@tanstack/react-query';
-import { FlameStatusResponse } from '@flame'; // Changed from FlameStatusPayload
+import type { FlameStatusResponse } from '@/types/flame';
 import { fetchFlameStatus } from '@/lib/api/quests';
 import { FIRST_FLAME_QUEST_ID } from '@flame';
 
