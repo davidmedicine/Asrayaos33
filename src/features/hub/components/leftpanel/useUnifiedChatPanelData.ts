@@ -117,6 +117,7 @@ export const useUnifiedChatPanelData = ({
   const [_isPendingTransitionSearch, startTransition] = useTransition(); // Renamed by diff (_isPendingSearch -> _isPendingTransitionSearch)
 
   const hasDoneInitialAutoSelect = useRef(false);
+  const hasBootstrappedWhenEmpty = useRef(false);
   const heroButtonFlipStateRef = useRef<FlipState | null>(null);
 
   const prevListQDataForQuestsMemoRef = useRef<{
@@ -160,6 +161,16 @@ export const useUnifiedChatPanelData = ({
     if (prevRaw && currentRaw && shallow(prevRaw, currentRaw))
       return prevSorted;
     const sorted = (currentRaw ?? []).slice().sort(sortQuests);
+    if (
+      process.env.NODE_ENV !== "production" &&
+      sorted[0] &&
+      sorted[0].slug !== FIRST_FLAME_RITUAL_SLUG
+    ) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[useUnifiedChatPanelData] Expected first quest to be ${FIRST_FLAME_RITUAL_SLUG}, got ${sorted[0].slug}`,
+      );
+    }
     prevListQDataForQuestsMemoRef.current = {
       rawData: currentRaw,
       sortedQuests: sorted,
@@ -168,6 +179,36 @@ export const useUnifiedChatPanelData = ({
   }, [listQ.data?.quests]);
 
   const questsArray = quests ?? [];
+
+  useEffect(() => {
+    if (
+      !listQ.isSuccess ||
+      questsArray.length !== 0 ||
+      hasBootstrappedWhenEmpty.current
+    )
+      return;
+
+    hasBootstrappedWhenEmpty.current = true;
+
+    void (async () => {
+      await bootstrapFirstFlame();
+      await qc.invalidateQueries({
+        queryKey: QUESTS_QUERY_KEY,
+        exact: true,
+      });
+      await listQ.refetch();
+      await selectQuestSafely(FIRST_FLAME_RITUAL_SLUG);
+      router.replace(AppRoutes.RitualDayOne);
+    })();
+  }, [
+    listQ.isSuccess,
+    questsArray.length,
+    bootstrapFirstFlame,
+    qc,
+    listQ.refetch,
+    selectQuestSafely,
+    router,
+  ]);
 
   /* ---------------- Phase calculation (memoised) ---------------- */
   const nextPhase = useMemo(() => {
