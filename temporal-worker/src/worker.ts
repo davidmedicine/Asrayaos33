@@ -34,6 +34,25 @@ async function main(): Promise<void> {
     taskQueue: TEMPORAL_TASK_QUEUE,
     namespace: TEMPORAL_NAMESPACE,
     connection,                            // may be undefined (local dev) :contentReference[oaicite:1]{index=1}
+
+    /* Fix module-not-found errors for shared quest code */
+    bundlerOptions: {
+      webpackConfigHook: (config) => {
+        config.resolve ??= {};
+        config.resolve.alias = {
+          ...(config.resolve.alias || {}),
+          '@ritual': path.resolve(
+            __dirname,
+            '../../supabase/functions/_shared/5dayquest'
+          ),
+          '@flame': path.resolve(
+            __dirname,
+            '../../src/lib/shared/firstFlame.ts'
+          ),
+        };
+        return config;
+      },
+    },
   });
 
   /* Graceful shutdown — Ctrl-C / docker stop */
