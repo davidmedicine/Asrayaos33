@@ -94,6 +94,7 @@ const ActiveConversationPanelComponent: React.FC<ActiveConversationPanelProps> =
     queryFn: () => fetchFlameStatus(activeQuestId!),
     gcTime: 30 * 60_000,      // 30 minutes
     staleTime: 5 * 60_000,    // 5 minutes
+    refetchInterval: (data) => data?.processing ? 1500 : false,
     onSuccess: (data) => {
       if (activeQuestId && data) {
         setZustandQuestContext(activeQuestId, {
@@ -247,16 +248,8 @@ const ActiveConversationPanelComponent: React.FC<ActiveConversationPanelProps> =
   , [vercelMessages, activeQuestId, globalActiveAgentId]);
 
   const renderContent = () => {
-    if (flameQuery.data?.processing) {
-      return (
-        <div className="flex flex-col items-center justify-center flex-grow">
-          <LoadingSpinner size="lg" aria-label="Processing" />
-        </div>
-      );
-    }
-    if ((flameQuery.isLoading || flameQuery.isError) && !flameQuery.data && uiPhase === 'oracle_awaiting') {
-      return <LoadingContextFallback />;
-    }
+    if (flameQuery.data?.processing) return <LoadingContextFallback />;
+    if (flameQuery.isError && !flameQuery.data) return <LoadingContextFallback />;
     const useNativeVT = typeof document !== 'undefined' && 'startViewTransition' in document && devToolsVTEnabled && !prefersReducedMotion;
     const vtStyle: React.CSSProperties = useNativeVT ? { viewTransitionName: `acp-content-area-${activeQuestId || 'none'}` } : {};
 
