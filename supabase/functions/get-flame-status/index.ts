@@ -21,6 +21,8 @@ const SB_SVC = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const DEBUG =
   Deno.env.get(`DEBUG_${FN.toUpperCase().replace(/-/g, '_')}`) === 'true';
 
+const STALE_MS = 60_000; // consider data stale after 1 minute
+
 const json = (data: unknown, status = 200): Response =>
   new Response(JSON.stringify(data), {
     status,
@@ -49,6 +51,8 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authErr } = await sbUser.auth.getUser();
     if (authErr || !user?.id) return json({ error: "AUTH" }, 401);
 
+    log('INFO', LOG_STAGES.EF_GET_FLAME_STATUS_START, { user_id: user.id }, FN, DEBUG);
+
     const quest = await getOrCreateFirstFlame(sbAdmin, {
       title: "First Flame Ritual",
       type: "ritual",
@@ -68,6 +72,22 @@ Deno.serve(async (req) => {
     const overallProgress = progress ?? null;
     const day = (overallProgress?.current_day_target ?? 1) as RitualDayNumber;
 
+    const isFresh =
+      overallProgress &&
+      Date.now() - new Date(overallProgress.updated_at).getTime() <= STALE_MS;
+
+    if (!isFresh) {
+      await sbAdmin.functions.invoke('realtime-broadcast', {
+        body: {
+          channel: 'flame_status',
+          event: 'missing',
+          payload: { user_id: user.id },
+        },
+      });
+      log('DEBUG', LOG_STAGES.EF_GET_FLAME_STATUS_CACHE_MISS, null, FN, DEBUG);
+      return json({ processing: true, dataVersion: null }, 202);
+    }
+
     let dayDefinition = null;
     try {
       dayDefinition = await loadValidateAndCacheDayDef(day);
@@ -75,7 +95,7 @@ Deno.serve(async (req) => {
       log('WARN', LOG_STAGES.EF_GET_FLAME_STATUS_CACHE_MISS, null, FN, DEBUG);
       return json({ processing: true, dataVersion: null }, 202);
     }
-
+    log('INFO', LOG_STAGES.EF_GET_FLAME_STATUS_SUCCESS, null, FN, DEBUG);
     return json({
       processing: false,
       dataVersion: Date.now(),

@@ -1,7 +1,7 @@
 // src/workflows/seedFirstFlame.ts
 import * as wf from '@temporalio/workflow';
 import type * as act from '../activities';         // adjust the path if your activities live elsewhere
-import { FIRST_FLAME_QUEST_ID } from '../../src/lib/shared/firstFlame';
+import { FIRST_FLAME_QUEST_ID } from '../../../src/lib/shared/firstFlame';
 
 /** -------- Types -------- */
 export interface SeedFirstFlameInput {

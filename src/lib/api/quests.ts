@@ -636,7 +636,7 @@ export async function fetchFlameStatus(): Promise<FlameStatusResponse> {
   });
 
   if (rawServerData === null) {
-    return { processing: true };
+    throw new ProcessingError();
   }
 
   // Note: If 'get-flame-status' might also return a string due to missing headers,
@@ -654,12 +654,12 @@ export async function fetchFlameStatus(): Promise<FlameStatusResponse> {
         rawServerData,
       );
     }
-    return { processing: true };
+    throw new ProcessingError();
   }
   const serverResponse = parsedResult.data;
 
   if (serverResponse.processing) {
-    return { processing: true };
+    throw new ProcessingError();
   }
 
   if (
@@ -675,7 +675,7 @@ export async function fetchFlameStatus(): Promise<FlameStatusResponse> {
     if (process.env.NODE_ENV !== "production") {
       console.error(errorMsg, { serverResponse });
     }
-    return { processing: true };
+    throw new Error(errorMsg);
   }
 
   if (typeof (serverResponse as any).progress !== "number") {
@@ -811,8 +811,9 @@ export const defaultFlameStatusQueryOptions: UseQueryOptions<
 > = {
   queryKey: FIRST_FLAME_QUERY_KEY,
   queryFn: () => fetchFlameStatus(), // fetchFlameStatus no longer takes questId
-  staleTime: 1000 * 60 * 5, // 5 minutes; adjust based on expected data volatility
-  retry: false,
+  staleTime: 1000 * 60 * 5,
+  retry: (count, err) => (err as any)?.processing === true && count < 5,
+  retryDelay: attempt => Math.min(1000 * 2 ** attempt, 10000),
   refetchInterval: (data) =>
     data && (data as any).processing === true ? 2000 : false,
 };
@@ -845,7 +846,8 @@ export function buildFlameStatusQueryOpts(
     queryKey: queryKey,
     queryFn: () => fetchFlameStatus(), // fetchFlameStatus no longer takes questId
     staleTime: 0,
-    retry: false,
+    retry: (count, err) => (err as any)?.processing === true && count < 5,
+    retryDelay: attempt => Math.min(1000 * 2 ** attempt, 10000),
     refetchInterval: (data) =>
       data && (data as any).processing === true ? 2000 : false,
   } as const;
