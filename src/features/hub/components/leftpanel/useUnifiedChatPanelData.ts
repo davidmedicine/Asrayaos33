@@ -180,6 +180,31 @@ export const useUnifiedChatPanelData = ({
 
   const questsArray = quests ?? [];
 
+  async function bootstrapFirstFlame() {
+    if (!userId) return;
+    try {
+      await seedFirstFlame({ userId });
+      qc.invalidateQueries({ queryKey: keyFlameStatus(userId) });
+      await qc.fetchQuery(buildFlameStatusQueryOpts(userId));
+      // qc.invalidateQueries({ queryKey: QUESTS_QUERY_KEY }); // Comment updated by diff
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[bootstrapFirstFlame] failed", err);
+      setErrorDisplay({
+        message: err instanceof Error ? (err as Error).message : "An unknown error occurred.",
+      });
+    }
+  }
+
+  async function selectQuestSafely(id: string | null) {
+    if (!id) return setActiveQuestId(null);
+    const quest = questsArray.find((q) => q.id === id);
+    if (!quest) return;
+
+    startTransition(() => setActiveQuestId(id));
+    if (quest.isFirstFlameRitual) await maybeRedirectToRitualDayOne();
+  }
+
   useEffect(() => {
     if (
       !listQ.isSuccess ||
@@ -203,10 +228,8 @@ export const useUnifiedChatPanelData = ({
   }, [
     listQ.isSuccess,
     questsArray.length,
-    bootstrapFirstFlame,
     qc,
     listQ.refetch,
-    selectQuestSafely,
     router,
   ]);
 
@@ -254,17 +277,6 @@ export const useUnifiedChatPanelData = ({
     }
   }, [qc, router, userId]);
 
-  const selectQuestSafely = useCallback(
-    async (id: string | null) => {
-      if (!id) return setActiveQuestId(null);
-      const quest = questsArray.find((q) => q.id === id);
-      if (!quest) return;
-
-      startTransition(() => setActiveQuestId(id));
-      if (quest.isFirstFlameRitual) await maybeRedirectToRitualDayOne();
-    },
-    [questsArray, setActiveQuestId, maybeRedirectToRitualDayOne],
-  );
 
   const handleRetryLoad = useCallback(() => {
     setErrorDisplay(null); // Added by diff
@@ -282,24 +294,6 @@ export const useUnifiedChatPanelData = ({
    * 🔥 bootstrapFirstFlame
    * Kicks Temporal worker to seed ritual rows, then refetches flame‑status.
    */
-  const bootstrapFirstFlame = useCallback(async () => {
-    if (!userId) return;
-    try {
-      await seedFirstFlame({ userId });
-      qc.invalidateQueries({ queryKey: keyFlameStatus(userId) });
-      await qc.fetchQuery(buildFlameStatusQueryOpts(userId));
-      // qc.invalidateQueries({ queryKey: QUESTS_QUERY_KEY }); // Comment updated by diff
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error("[bootstrapFirstFlame] failed", err); // Diff uses console.error("[bootstrapFirstFlame] failed", err);
-      setErrorDisplay({
-        message:
-          err instanceof Error
-            ? (err as Error).message
-            : "An unknown error occurred.",
-      }); // Changed by diff
-    }
-  }, [userId, qc]);
 
   /**
    * Called after the user hits the First‑Flame CTA. Boots the ritual on the
@@ -327,7 +321,7 @@ export const useUnifiedChatPanelData = ({
     }
 
     router.replace(AppRoutes.RitualDayOne);
-  }, [bootstrapFirstFlame, userId, qc, questsArray, selectQuestSafely, router]);
+  }, [userId, qc, questsArray, router]);
 
   /* ------------- Auto‑select & prefetch once data is ready ----------- */
   useEffect(() => {
@@ -361,7 +355,6 @@ export const useUnifiedChatPanelData = ({
     questsArray,
     qc,
     userId,
-    selectQuestSafely,
   ]);
 
   /* ------------- Error Display Effect for listQ query ----------- */
