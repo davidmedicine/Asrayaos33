@@ -22,11 +22,8 @@ import {
 } from "@tanstack/react-query";
 import { useEffect } from "react";
 // Query helpers for First Flame status
-import {
-  fetchFlameStatus,
-  FLAME_STATUS_BASE_QUERY_KEY,
-} from "@/lib/api/quests";
-import { FIRST_FLAME_SLUG } from "@flame";
+import { fetchFlameStatus } from "@/lib/api/quests";
+import { FIRST_FLAME_QUERY_KEY, FIRST_FLAME_QUEST_ID } from "@flame";
 import { useBoundStore } from "@/lib/state/store";
 // FlameStatusResponse should contain `dataVersion: number` (or similar) for version comparison.
 import type { FlameStatusResponse } from "@flame";
@@ -58,7 +55,7 @@ const flameStatusRetryDelay = (attemptIndex: number): number => {
 };
 
 export function useFlameStatus(
-  questId: string = FIRST_FLAME_SLUG,
+  questId: string = FIRST_FLAME_QUEST_ID,
 ): UseQueryResult<FlameStatusResponse, unknown> {
   const queryClient = useQueryClient();
   // Stable selectors for Zustand actions and version, preventing re-subscriptions.
@@ -69,23 +66,20 @@ export function useFlameStatus(
   // SSR/Offline: Listener to refetch data when the application comes back online.
   useEffect(() => {
     const handleOnline = () => {
-      queryClient.invalidateQueries({
-        queryKey: [...FLAME_STATUS_BASE_QUERY_KEY, questId],
-      });
+      // Use the exported constant for the query key
+      queryClient.invalidateQueries({ queryKey: FIRST_FLAME_QUERY_KEY });
     };
     window.addEventListener("online", handleOnline);
     return () => window.removeEventListener("online", handleOnline);
   }, [queryClient]); // queryClient is stable, effect runs once per component instance.
 
-  const queryKey = [...FLAME_STATUS_BASE_QUERY_KEY, questId] as const;
-
   return useQuery<
     FlameStatusResponse, // TQueryFnData: type returned by queryFn
     unknown, // TError: type for errors
     FlameStatusResponse, // TData: type of data delivered to components
-    typeof queryKey
+    typeof FIRST_FLAME_QUERY_KEY // TQueryKey: strictly typed using the constant
   >({
-    queryKey,
+    queryKey: FIRST_FLAME_QUERY_KEY, // Use the exported constant
     queryFn: () => fetchFlameStatus(questId),
     staleTime: 0, // Ritual UX: Data is always considered stale, ensuring refetch on mount.
     refetchOnWindowFocus: true, // Ritual UX: Ensures progress updates if user worked in another tab.
