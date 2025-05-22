@@ -22,6 +22,8 @@ import React, {
 // React's unstable ViewTransition for potential future use or if preferred over Next's
 import { unstable_ViewTransition as ReactViewTransition } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import type { FlameStatusResponse } from '@flame';
+import { fetchFlameStatus } from '@/lib/api/quests';
 import { shallow } from 'zustand/shallow';
 
 // GSAP and utilities
@@ -227,6 +229,32 @@ const ChatContextPanelComponent: React.FC<{
     } as GenericQuestContext);
   };
 
+  const flameQuery = useQuery<FlameStatusResponse>({
+    queryKey: ['flameStatus', activeQuestId],
+    enabled: !!activeQuestId && activeQuest?.slug === FIRST_FLAME_SLUG,
+    queryFn: () => fetchFlameStatus(activeQuestId!),
+    gcTime: 30 * 60_000,
+    staleTime: 5 * 60_000,
+    refetchInterval: (data) => data?.processing ? 1500 : false,
+    onSuccess: (data) => {
+      if (activeQuestId) {
+        setQuestContext(activeQuestId, {
+          overallProgress: data.overallProgress,
+          dayDefinition: data.dayDefinition,
+        });
+        setLoadingQuestContext(activeQuestId, false);
+        setErrorQuestContext(activeQuestId, null);
+      }
+    },
+    onError: (err) => {
+      if (activeQuestId) {
+        setErrorQuestContext(activeQuestId, (err as Error).message);
+        setLoadingQuestContext(activeQuestId, false);
+        setQuestContext(activeQuestId, null);
+      }
+    },
+  });
+
   const questCtxQuery = useQuery<QuestContext, Error>({
     queryKey: ['context', activeQuestId],
     queryFn: async () => {
@@ -235,7 +263,7 @@ const ChatContextPanelComponent: React.FC<{
       }
       return fetchQuestContextData(activeQuest);
     },
-    enabled: !!activeQuestId && !!activeQuest,
+    enabled: !!activeQuestId && !!activeQuest && activeQuest.slug !== FIRST_FLAME_SLUG,
     staleTime: 5 * 60_000, // 5 minutes
     refetchOnWindowFocus: false,
     onSuccess: (data) => {
@@ -259,6 +287,17 @@ const ChatContextPanelComponent: React.FC<{
       setLoadingQuestContext(activeQuestId, true);
     }
   }, [activeQuestId, questCtxQuery.isPending, isLoadingFromSlice, setLoadingQuestContext]);
+
+  useEffect(() => {
+    if (
+      activeQuestId &&
+      activeQuest?.slug === FIRST_FLAME_SLUG &&
+      flameQuery.isPending &&
+      !isLoadingFromSlice
+    ) {
+      setLoadingQuestContext(activeQuestId, true);
+    }
+  }, [activeQuestId, activeQuest?.slug, flameQuery.isPending, isLoadingFromSlice, setLoadingQuestContext]);
 
 
   const currentPanelState: PanelState = useMemo(() => {
