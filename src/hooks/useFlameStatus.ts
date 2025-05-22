@@ -16,30 +16,38 @@
  */
 
 import {
-  useQuery, useQueryClient, type UseQueryResult,
-} from '@tanstack/react-query';
-import { useEffect } from 'react';
+  useQuery,
+  useQueryClient,
+  type UseQueryResult,
+} from "@tanstack/react-query";
+import { useEffect } from "react";
 // Query helpers for First Flame status
-import { fetchFlameStatus, FLAME_STATUS_QUERY_KEY } from '@/lib/api/quests';
-import { FIRST_FLAME_QUEST_ID } from '@flame';
-import { useBoundStore } from '@/lib/state/store';
+import {
+  fetchFlameStatus,
+  FLAME_STATUS_BASE_QUERY_KEY,
+} from "@/lib/api/quests";
+import { FIRST_FLAME_SLUG } from "@flame";
+import { useBoundStore } from "@/lib/state/store";
 // FlameStatusResponse should contain `dataVersion: number` (or similar) for version comparison.
-import type { FlameStatusResponse } from '@flame';
+import type { FlameStatusResponse } from "@flame";
 
 // Type for errors passed to the Zustand slice's setError action.
 // This allows UI to branch on error types (e.g., show specific messages for RLS).
 export type SliceError =
-  | { type: 'supabase'; status: number; message: string }
-  | { type: 'network'; message: string }
-  | { type: 'unknown'; message: string };
+  | { type: "supabase"; status: number; message: string }
+  | { type: "network"; message: string }
+  | { type: "unknown"; message: string };
 
 // Type guard for Supabase-like errors (can be refined based on actual error structure)
 // This helps ensure `err.status` and `err.message` exist before access.
-function isSupabaseRpcError(err: unknown): err is { status: number; message: string } {
+function isSupabaseRpcError(
+  err: unknown,
+): err is { status: number; message: string } {
   return (
-    typeof err === 'object' && err !== null &&
-    typeof (err as { status?: unknown }).status === 'number' &&
-    typeof (err as { message?: unknown }).message === 'string'
+    typeof err === "object" &&
+    err !== null &&
+    typeof (err as { status?: unknown }).status === "number" &&
+    typeof (err as { message?: unknown }).message === "string"
   );
 }
 
@@ -50,7 +58,7 @@ const flameStatusRetryDelay = (attemptIndex: number): number => {
 };
 
 export function useFlameStatus(
-  questId: string = FIRST_FLAME_QUEST_ID,
+  questId: string = FIRST_FLAME_SLUG,
 ): UseQueryResult<FlameStatusResponse, unknown> {
   const queryClient = useQueryClient();
   // Stable selectors for Zustand actions and version, preventing re-subscriptions.
@@ -61,47 +69,65 @@ export function useFlameStatus(
   // SSR/Offline: Listener to refetch data when the application comes back online.
   useEffect(() => {
     const handleOnline = () => {
-      // Use the exported constant for the query key
-      queryClient.invalidateQueries({ queryKey: FLAME_STATUS_QUERY_KEY });
+      queryClient.invalidateQueries({
+        queryKey: [...FLAME_STATUS_BASE_QUERY_KEY, questId],
+      });
     };
-    window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
   }, [queryClient]); // queryClient is stable, effect runs once per component instance.
+
+  const queryKey = [...FLAME_STATUS_BASE_QUERY_KEY, questId] as const;
 
   return useQuery<
     FlameStatusResponse, // TQueryFnData: type returned by queryFn
-    unknown,             // TError: type for errors
+    unknown, // TError: type for errors
     FlameStatusResponse, // TData: type of data delivered to components
-    typeof FLAME_STATUS_QUERY_KEY // TQueryKey: strictly typed using the constant
+    typeof queryKey
   >({
-    queryKey: FLAME_STATUS_QUERY_KEY, // Use the exported constant
+    queryKey,
     queryFn: () => fetchFlameStatus(questId),
     staleTime: 0, // Ritual UX: Data is always considered stale, ensuring refetch on mount.
     refetchOnWindowFocus: true, // Ritual UX: Ensures progress updates if user worked in another tab.
     placeholderData: (previous) => previous, // UX: TanStack v5 pattern. Keeps old data visible, no UI flash.
     // SSR/Offline: Skip fetch if restoring from SSR hydration or if offline.
-    enabled: !queryClient.isRestoring && (typeof navigator !== 'undefined' ? navigator.onLine : true),
+    enabled:
+      !queryClient.isRestoring &&
+      (typeof navigator !== "undefined" ? navigator.onLine : true),
     retryDelay: flameStatusRetryDelay,
     // Default retry for React Query is 3 times for queryFn failures.
-    refetchInterval: (data) => (data && (data as any).processing === true ? 2000 : false),
+    refetchInterval: (data) =>
+      data && (data as any).processing === true ? 2000 : false,
 
     onSuccess: (data: FlameStatusResponse) => {
       // Silent Hydration: Update slice only if fetched data is newer.
       // Use `data.dataVersion` (or the actual version field name from FlameStatusResponse).
       // Guard version check: `sliceVersion ?? 0` handles initial undefined/0 state.
       // Assumes FlameStatusResponse has a `dataVersion: number` field.
-      if (typeof data.dataVersion === 'number' && (sliceVersion ?? 0) < data.dataVersion) {
+      if (
+        typeof data.dataVersion === "number" &&
+        (sliceVersion ?? 0) < data.dataVersion
+      ) {
         hydrate(data);
       }
     },
-    onError: (err: unknown) => { // Error Bubbling: Surface typed errors to Zustand slice.
+    onError: (err: unknown) => {
+      // Error Bubbling: Surface typed errors to Zustand slice.
 
       if (isSupabaseRpcError(err)) {
-        setError({ type: 'supabase', status: err.status, message: err.message });
-      } else if (err instanceof TypeError) { // TypeError often indicates network issues like "Failed to fetch".
-        setError({ type: 'network', message: err.message });
+        setError({
+          type: "supabase",
+          status: err.status,
+          message: err.message,
+        });
+      } else if (err instanceof TypeError) {
+        // TypeError often indicates network issues like "Failed to fetch".
+        setError({ type: "network", message: err.message });
       } else {
-        setError({ type: 'unknown', message: err instanceof Error ? err.message : String(err) });
+        setError({
+          type: "unknown",
+          message: err instanceof Error ? err.message : String(err),
+        });
       }
     },
   });
