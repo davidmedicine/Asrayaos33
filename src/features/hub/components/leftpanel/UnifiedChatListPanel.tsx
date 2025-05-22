@@ -166,7 +166,7 @@ function UnifiedChatListPanelImpl({
             errorDisplay={errorDisplay}
             firstFlameQuest={safeFirstFlameQuest}
             isInitialLoadComplete={isInitialLoadComplete}
-            questsAvailable={quests.length > 0}
+            questsAvailable={(quests?.length ?? 0) > 0}
             onSelectFirstFlame={handleSelectFirstFlameFromHero}
             bootstrapFirstFlame={bootstrapFirstFlame}
             onRetryLoad={handleRetryLoad}
@@ -183,7 +183,7 @@ function UnifiedChatListPanelImpl({
             /* data */
             listItemData={listItemData}
             activeQuestId={activeQuestId}
-            quests={quests}
+            quests={quests ?? []}
             searchQuery={searchQuery}
             shouldVirtualize={shouldVirtualize}
             /* loading */
