@@ -2,13 +2,13 @@
  *  src/lib/api/quests.ts
  *
  *  Thin, fully-typed wrappers around Supabase Edge Functions that power the
- *  Quest UI and the “First-Flame Ritual” flow.
+ *  Quest UI and the "First-Flame Ritual" flow.
  *
  *  Key improvements
  *    – explicit GET/POST so the Edge runtime sees the right verb
  *    – single generic invoke<T>() helper with robust error bubbling
  *    – richer console context for debugging
- *    – no silent “undefined” returns: every wrapper either throws or returns
+ *    – no silent "undefined" returns: every wrapper either throws or returns
  *    - dataVersion handling for GET requests to support slice hydration guards
  *    - React-Query helpers with pre-invalidation and prefetching
  *    - Zod validation for key API responses
@@ -27,18 +27,21 @@ import { z } from "zod";
 
 import { supabase } from "@/lib/supabase_client/client";
 import { progressFromStatus } from "./progressFromStatus";
-import {
-  FIRST_FLAME_QUERY_KEY,
-  FIRST_FLAME_QUEST_ID, // Retained as per diff, though not directly used in modified logic here
-  isFirstFlame,
-} from "@flame";
 import type {
   FlameImprintServer,
   FlameProgressDayServer,
-  FlameStatusPayload, // This is the type when data IS available (processing: false)
   FlameStatusResponse,
   SubmitImprintArgs as FirstFlameSubmitImprintArgs,
 } from "@/types/flame";
+
+/** Legacy export for older hooks – do NOT rename */
+export const FIRST_FLAME_QUERY_KEY = ["flame-status"] as const;
+export const FLAME_STATUS_BASE_QUERY_KEY = FIRST_FLAME_QUERY_KEY;
+export const FIRST_FLAME_SLUG = "first-flame-ritual";
+
+export function isFirstFlame(q: { slug?: string }): boolean {
+  return q.slug === FIRST_FLAME_SLUG;
+}
 
 // --- Zod Schemas for API Response Validation ---
 // (These would ideally be co-located with their respective type definitions or in a dedicated zod schema file)
@@ -79,21 +82,86 @@ const zFlameImprintServer = z
  * Zod schema for parsing the raw response from 'get-flame-status' Edge Function.
  * This type represents what the server sends, which might indicate processing.
  */
-export const zFlameStatusServerResponse = z
-  .object({
-    processing: z.boolean(),
-    dataVersion: z.number().int().optional(), // Required if processing is false
-    currentDay: z.number().int().min(0).optional(), // Required if processing is false
-    totalDays: z.number().int().min(1).optional(), // Required if processing is false
-    ritualStartDate: zTimestampISO.nullable().optional(), // Required if processing is false (can be null)
-    progress: z.array(zFlameProgressDayServer).optional(), // Required if processing is false
-    imprints: z.array(zFlameImprintServer).optional(), // Required if processing is false
-    // Add any other known properties from FlameStatusPayload, marking as optional
-    // For example:
-    // ritualCompleted: z.boolean().optional(),
-    // nextDayUnlockTime: zTimestampISO.nullable().optional(),
-  })
-  .passthrough();
+export const zFlameStatusServerResponse = z.discriminatedUnion('processing', [
+  // Processing state schema - allow dataVersion to be either null or a number
+  z.object({
+    processing: z.literal(true),
+    dataVersion: z.union([z.null(), z.number()]),
+    meta: z.object({
+      estimatedRetryMs: z.number().int(),
+      retryCount: z.number().int().optional(),
+      maxRetryExceeded: z.boolean().optional(),
+      partialData: z.boolean().optional()
+    }).optional(),
+    // Allow partial data in processing state
+    overallProgress: z.object({
+      current_day_target: z.number().int().min(1),
+      is_quest_complete: z.boolean(),
+      last_imprint_at: zTimestampISO.nullable().optional(),
+      updated_at: zTimestampISO.optional(),
+    }).nullable().optional(),
+    dayDefinition: z.object({
+      ritualDay: z.number().int().min(1),
+      ritualStage: z.string(),
+      theme: z.string(),
+      title: z.string(),
+      subtitle: z.string(),
+      accentColor: z.string().optional(),
+      iconName: z.string().optional(),
+      intention: z.string(),
+      narrativeOpening: z.array(z.string()),
+      oracleGuidance: z.object({
+        interactionPrompt: z.string(),
+        oraclePromptPreview: z.string(),
+      }),
+      reflectionJourney: z.array(z.object({
+        id: z.string(),
+        title: z.string(),
+        description: z.string(),
+      })),
+      contemplationPrompts: z.array(z.string()),
+      symbolism: z.array(z.string()),
+      affirmation: z.string(),
+      narrativeClosing: z.array(z.string()),
+    }).nullable().optional(),
+  }).passthrough(),
+  // Success state schema
+  z.object({
+    processing: z.literal(false),
+    dataVersion: z.number().int(),
+    overallProgress: z.object({
+      current_day_target: z.number().int().min(1),
+      is_quest_complete: z.boolean(),
+      last_imprint_at: zTimestampISO.nullable().optional(),
+      updated_at: zTimestampISO.optional(),
+    }).nullable(),
+    dayDefinition: z.object({
+      ritualDay: z.number().int().min(1),
+      ritualStage: z.string(),
+      theme: z.string(),
+      title: z.string(),
+      subtitle: z.string(),
+      accentColor: z.string().optional(),
+      iconName: z.string().optional(),
+      intention: z.string(),
+      narrativeOpening: z.array(z.string()),
+      oracleGuidance: z.object({
+        interactionPrompt: z.string(),
+        oraclePromptPreview: z.string(),
+      }),
+      reflectionJourney: z.array(z.object({
+        id: z.string(),
+        title: z.string(),
+        description: z.string(),
+      })),
+      contemplationPrompts: z.array(z.string()),
+      symbolism: z.array(z.string()),
+      affirmation: z.string(),
+      narrativeClosing: z.array(z.string()),
+    }).nullable(),
+  }).passthrough()
+]);
+
 export type FlameStatusServerResponse = z.infer<
   typeof zFlameStatusServerResponse
 >;
@@ -102,7 +170,6 @@ export type FlameStatusServerResponse = z.infer<
 /* 1. Constants & Types                                                     */
 /* -------------------------------------------------------------------------- */
 
-export const FIRST_FLAME_SLUG = "first-flame-ritual"; // Maintained from original, diff doesn't remove definition
 const BG_SYNC_SUBMIT_IMPRINT_TAG_PREFIX = "submit-flame-imprint-sync:";
 
 /** Edge Function error codes shared across clients, returned in response body. */
@@ -236,21 +303,15 @@ async function queueImprintForSync(
   }
   try {
     const registration = await navigator.serviceWorker.ready;
-    // TODO: Persist payload to IndexedDB here.
-    // Example: await idbStore.setItem(`queuedImprint:${payload.clientGeneratedId}`, payload);
+    // TODO: Persist payload to idb-keyval store 'flame-sync-queue'
+    // Example: await set(`flame-sync:${payload.clientGeneratedId}`, payload);
+    
     if (process.env.NODE_ENV !== "production") {
-      console.info(
-        `[BgSync] TODO: Persist imprint ${payload.clientGeneratedId} to IndexedDB.`,
-      );
+      console.info(`[BgSync] queued ${payload.clientGeneratedId}`);
     }
 
     const syncTag = `${BG_SYNC_SUBMIT_IMPRINT_TAG_PREFIX}${payload.clientGeneratedId}`;
     await registration.sync.register(syncTag);
-    if (process.env.NODE_ENV !== "production") {
-      console.info(
-        `[BgSync] Task ${syncTag} registered for client ID: ${payload.clientGeneratedId}.`,
-      );
-    }
   } catch (error) {
     console.error(
       `[BgSync] Failed to register sync task for imprint ${payload.clientGeneratedId}:`,
@@ -375,9 +436,8 @@ async function invoke<TData>(
     );
 
     if (error) {
-      // Supabase client errors (FunctionsHttpError, FunctionsRelayError, FunctionsFetchError)
-      // These errors often contain valuable context like HTTP status codes.
-      throw error;
+      // Add context to the error and rethrow
+      throw Object.assign(error, { fn: functionName, method: resolvedMethod });
     }
 
     // `data` is already parsed by supabase-js client if response is JSON with correct header.
@@ -627,16 +687,21 @@ export async function fetchFlameStatus(): Promise<FlameStatusResponse> {
   if (error || !user?.id) {
     throw error ?? new Error("User not authenticated");
   }
-  const user_id = user.id;
-  const flameSpirit = "ember";
+  const userId = user.id;
 
   const rawServerData = await invoke<unknown>("get-flame-status", {
     method: "GET",
-    urlParams: { user_id, flameSpirit },
+    urlParams: { userId },
   });
 
   if (rawServerData === null) {
-    throw new ProcessingError();
+    // Return minimal data instead of throwing
+    return { 
+      processing: true, 
+      dataVersion: Date.now(),
+      overallProgress: null,
+      dayDefinition: null
+    };
   }
 
   // Note: If 'get-flame-status' might also return a string due to missing headers,
@@ -654,44 +719,21 @@ export async function fetchFlameStatus(): Promise<FlameStatusResponse> {
         rawServerData,
       );
     }
-    throw new ProcessingError();
+    
+    // Return minimal data instead of throwing
+    return { 
+      processing: true, 
+      dataVersion: Date.now(),
+      overallProgress: null,
+      dayDefinition: null
+    };
   }
+  
   const serverResponse = parsedResult.data;
-
-  if (serverResponse.processing) {
-    throw new ProcessingError();
-  }
-
-  if (
-    typeof serverResponse.dataVersion !== "number" ||
-    typeof serverResponse.currentDay !== "number" ||
-    typeof serverResponse.totalDays !== "number" ||
-    serverResponse.ritualStartDate === undefined ||
-    !serverResponse.progress ||
-    !serverResponse.imprints
-  ) {
-    const errorMsg =
-      "[API] fetchFlameStatus: Response is invalid - missing required fields when not processing.";
-    if (process.env.NODE_ENV !== "production") {
-      console.error(errorMsg, { serverResponse });
-    }
-    throw new Error(errorMsg);
-  }
-
-  if (typeof (serverResponse as any).progress !== "number") {
-    const derived = progressFromStatus({
-      progress: serverResponse.progress as any,
-      totalDays: serverResponse.totalDays,
-    });
-    if (typeof derived === "number") {
-      (serverResponse as any).progress = derived;
-    }
-  }
-
-  return {
-    processing: false,
-    ...serverResponse,
-  } as FlameStatusResponse;
+  
+  // Always return the server response, even if processing is true
+  // This allows UI components to show partial data while waiting for completion
+  return serverResponse as FlameStatusResponse;
 }
 
 /**
@@ -774,13 +816,8 @@ export async function submitImprint(
 /* 6. React-Query Utilities                                                   */
 /* -------------------------------------------------------------------------- */
 
-/** Base query key for flame status. Append user ID for user-specific status. */
-export const FLAME_STATUS_BASE_QUERY_KEY = ["flame-status"] as const;
-/**
- * Alias used by hooks expecting a plain FLAME_STATUS_QUERY_KEY constant.
- * Keeps backward compatibility with prior exports.
- */
-export const FLAME_STATUS_QUERY_KEY = FLAME_STATUS_BASE_QUERY_KEY;
+/** Query key for the user's quest list. */
+export const QUESTS_QUERY_KEY = ["list-quests"] as const;
 
 /**
  * Type for flame status query keys. Can be global or user-specific.
@@ -789,9 +826,6 @@ export const FLAME_STATUS_QUERY_KEY = FLAME_STATUS_BASE_QUERY_KEY;
 type FlameStatusQueryKey =
   | typeof FIRST_FLAME_QUERY_KEY
   | readonly [...typeof FIRST_FLAME_QUERY_KEY, string];
-
-/** Query key for the user's quest list. */
-export const QUESTS_QUERY_KEY = ["list-quests"] as const;
 
 /**
  * Default options for `useQuery` hook when fetching flame status *without a specific user ID*.
@@ -846,10 +880,14 @@ export function buildFlameStatusQueryOpts(
     queryKey: queryKey,
     queryFn: () => fetchFlameStatus(), // fetchFlameStatus no longer takes questId
     staleTime: 0,
-    retry: (count, err) => (err as any)?.processing === true && count < 5,
+    // No longer need to retry on ProcessingError since we're not throwing it
+    retry: 1,
     retryDelay: attempt => Math.min(1000 * 2 ** attempt, 10000),
+    // Adjust refetch interval logic to handle processing state
     refetchInterval: (data) =>
-      data && (data as any).processing === true ? 2000 : false,
+      data && data.processing === true ? 1500 : false,
+    // Allow partial data to be used immediately
+    refetchOnMount: true
   } as const;
 }
 

@@ -16,6 +16,9 @@ import { shallow } from 'zustand/shallow';
 import { cn } from '@/lib/utils';
 import { gsap } from '@/lib/gsapSetup';
 import { useChat, type Message as VercelMessage } from 'ai/react';
+// Import AI SDK 5.0 types and utilities (commented out until SDK is installed)
+// import { defaultChatStore, zodSchema, streamText } from 'ai';
+// import { type UIMessage, convertToModelMessages } from 'ai';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Panel } from '@/components/panels/Panel';
@@ -132,30 +135,63 @@ const ActiveConversationPanelComponent: React.FC<ActiveConversationPanelProps> =
   });
 
   useEffect(() => {
-    if (activeQuestId && flameQuery.data?.dayDefinition && !seededChatForQuestRef.current[activeQuestId] && !flameQuery.isLoading) {
+    // Improved logic: Check if we need to seed chat, even if we're still loading but have dayDefinition
+    if (activeQuestId && !seededChatForQuestRef.current[activeQuestId] && flameQuery.data?.dayDefinition) {
       const dayDef = flameQuery.data.dayDefinition;
       const openerParts: string[] = [];
+      
+      // Add narrative opening content first
       if (dayDef.narrativeOpening && dayDef.narrativeOpening.length > 0) {
         openerParts.push(...dayDef.narrativeOpening);
       }
+      
+      // Add oracle guidance prompt last for direct interaction framing
       if (dayDef.oracleGuidance?.interactionPrompt) {
         openerParts.push(dayDef.oracleGuidance.interactionPrompt);
       }
+      
       const opener = openerParts.join('\n\n').trim();
+      
       if (opener) {
-        setMessages([{
+        // Create system message with rich context and metadata
+        const systemMessage = {
           id: `sys-seed-${activeQuestId}-${dayDef.ritualDay || 'init'}-${Date.now()}`,
           role: 'system',
           content: opener,
           createdAt: new Date(),
-        }]);
+          // AI SDK 5.0 would add metadata like:
+          // metadata: {
+          //   ritualDay: dayDef.ritualDay,
+          //   ritualStage: dayDef.ritualStage,
+          //   theme: dayDef.theme
+          // }
+        };
+        
+        // Optional: Add specific ritual guidance if available
+        const assistantWelcome = {
+          id: `assistant-welcome-${activeQuestId}-${Date.now()}`,
+          role: 'assistant',
+          content: `Welcome to Day ${dayDef.ritualDay}: ${dayDef.title}. ${dayDef.subtitle}`,
+          createdAt: new Date()
+        };
+        
+        // Set initial messages
+        setMessages([systemMessage, assistantWelcome]);
+        
+        console.log("[ActiveConversationPanel] Seeded chat messages for quest", { 
+          questId: activeQuestId,
+          dayNumber: dayDef.ritualDay,
+          processing: flameQuery.data.processing
+        });
       } else {
         setMessages([]);
       }
+      
+      // Mark this quest as seeded to prevent duplicate seeding
       seededChatForQuestRef.current[activeQuestId] = true;
       animatedMessagesRef.current.clear();
     }
-  }, [activeQuestId, flameQuery.data, flameQuery.isLoading, setMessages]);
+  }, [activeQuestId, flameQuery.data, setMessages]);
 
   const [uiPhase, setUiPhase] = useState<UIPhase>('oracle_awaiting');
   const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
@@ -171,15 +207,72 @@ const ActiveConversationPanelComponent: React.FC<ActiveConversationPanelProps> =
       clearTimeout(processingTimerRef.current);
       processingTimerRef.current = undefined;
     }
-  }, [flameQuery.data?.processing, addToast]);
+    
+    // Log the flame query state for debugging
+    if (flameQuery.data) {
+      console.log("[ActiveConversationPanel] Flame query data:", {
+        processing: flameQuery.data.processing,
+        hasOverallProgress: !!flameQuery.data.overallProgress,
+        hasDayDefinition: !!flameQuery.data.dayDefinition,
+        questId: activeQuestId
+      });
+    }
+  }, [flameQuery.data, addToast, activeQuestId]);
 
   useLayoutEffect(() => {
     const canUseNativeVT = typeof document !== 'undefined' && 'startViewTransition' in document;
     const newPhase = (() => {
-      if (!activeQuestId || flameQuery.isLoading || !flameQuery.data?.dayDefinition) return 'oracle_awaiting';
-      if (!seededChatForQuestRef.current[activeQuestId]) return 'oracle_awaiting';
-      if (firstQuestJustCreated) return 'oracle_awakening';
-      return (uiPhase.startsWith('oracle_') && uiPhase !== 'oracle_receding') ? 'oracle_receding' : 'chat_active';
+      // If we don't have an active quest ID, go to oracle_awaiting
+      if (!activeQuestId) return 'oracle_awaiting';
+      
+      // Always check if we have a day definition first, even while loading
+      // This prioritizes showing content as soon as possible
+      if (flameQuery.data?.dayDefinition) {
+        console.log("[ActiveConversationPanel] Have day definition", { 
+          seeded: seededChatForQuestRef.current[activeQuestId],
+          firstQuest: firstQuestJustCreated, 
+          uiPhase,
+          processing: flameQuery.data?.processing
+        });
+        
+        // If we haven't seeded chat messages yet, do so and show oracle_awakening
+        if (!seededChatForQuestRef.current[activeQuestId]) {
+          // Message seeding is handled in the useEffect hook
+          // Just trigger the appropriate UI phase
+          seededChatForQuestRef.current[activeQuestId] = true;
+          console.log("[ActiveConversationPanel] Showing oracle_awakening");
+          return 'oracle_awakening';
+        }
+        
+        // If this is the first quest just created, show the oracle awakening
+        if (firstQuestJustCreated) return 'oracle_awakening';
+        
+        // If we're already in chat_active or oracle_receding, stay there
+        if (uiPhase === 'chat_active' || uiPhase === 'oracle_receding') return uiPhase;
+        
+        // Otherwise, transition from oracle state to receding
+        return (uiPhase.startsWith('oracle_')) ? 'oracle_receding' : 'chat_active';
+      }
+      
+      // If we don't have a day definition but have seeded chat, use that
+      if (seededChatForQuestRef.current[activeQuestId]) {
+        console.log("[ActiveConversationPanel] No day definition but have seeded chat");
+        // Stay in current UI phase if we're in chat_active or oracle_receding
+        if (uiPhase === 'chat_active' || uiPhase === 'oracle_receding') return uiPhase;
+        
+        // Otherwise move to chat_active
+        return 'chat_active';
+      }
+      
+      // If we're still loading and don't have any data yet, stay in oracle_awaiting
+      console.log("[ActiveConversationPanel] Awaiting data", {
+        loading: flameQuery.isLoading,
+        hasData: !!flameQuery.data,
+        processing: flameQuery.data?.processing
+      });
+      
+      // Default fallback to oracle_awaiting if we don't have enough data
+      return 'oracle_awaiting';
     })();
 
     if (uiPhase !== newPhase) {
@@ -199,10 +292,33 @@ const ActiveConversationPanelComponent: React.FC<ActiveConversationPanelProps> =
   const handleSubmitMessage = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!input.trim() || isSendingMessage || !activeQuestId) return;
-    handleVercelSubmitInternal(e);
+    
+    // Track message submission start time for metadata
+    const startTime = Date.now();
+    
+    // Record that this is no longer the first interaction
     if (firstQuestJustCreated) flushSync(() => setFirstQuestJustCreated(false));
+    
+    // Submit the message to the Vercel AI SDK
+    handleVercelSubmitInternal(e);
+    
+    // For First Flame quests, invalidate flame status to refresh progress
     if (activeQuestId && activeConversation?.slug === FIRST_FLAME_SLUG) {
+      // AI SDK 5.0 would add metadata here about the interaction
+      // const messageMetadata = {
+      //   messageType: 'ritual-interaction',
+      //   dayNumber: flameQuery.data?.overallProgress?.current_day_target || 1,
+      //   theme: flameQuery.data?.dayDefinition?.theme,
+      //   responseTime: Date.now() - startTime
+      // };
+      
+      // Give the server time to process before invalidating cache
       setTimeout(() => invalidateFlameStatus(queryClient, activeQuestId), 1200);
+      
+      console.log("[ActiveConversationPanel] Processing message for ritual quest", {
+        questId: activeQuestId,
+        processingTime: Date.now() - startTime
+      });
     }
   };
 
@@ -249,8 +365,10 @@ const ActiveConversationPanelComponent: React.FC<ActiveConversationPanelProps> =
   , [vercelMessages, activeQuestId, globalActiveAgentId]);
 
   const renderContent = () => {
-    if (flameQuery.data?.processing) return <LoadingContextFallback />;
-    if (flameQuery.isError && !flameQuery.data) return <LoadingContextFallback />;
+    // Don't block on processing state, only show loading fallback if we have no data at all
+    if (flameQuery.isLoading && !flameQuery.data) return <LoadingContextFallback />;
+    if (flameQuery.isError && !flameQuery.data && !seededChatForQuestRef.current[activeQuestId || '']) return <LoadingContextFallback />;
+    
     const useNativeVT = typeof document !== 'undefined' && 'startViewTransition' in document && devToolsVTEnabled && !prefersReducedMotion;
     const vtStyle: React.CSSProperties = useNativeVT ? { viewTransitionName: `acp-content-area-${activeQuestId || 'none'}` } : {};
 
@@ -275,6 +393,12 @@ const ActiveConversationPanelComponent: React.FC<ActiveConversationPanelProps> =
             <h2 id={panelTitleId} className="sr-only">Chat with {activeConversation?.name || 'the Oracle'}</h2>
             <div role="log" aria-label={`Messages for ${activeConversation?.name || 'current conversation'}`}
               className={cn("flex-grow min-h-0 overflow-y-auto p-4 space-y-3 custom-scrollbar", { "overscroll-behavior-contain": !isMobile })}>
+              {/* Show a processing notice, but don't block the UI */}
+              {flameQuery.data?.processing && (
+                <div className="text-amber-500/90 bg-amber-500/10 p-3 rounded text-sm mb-4">
+                  <span className="font-medium">Processing:</span> Setting up your conversation. You can begin chatting while we complete the setup.
+                </div>
+              )}
               {flameQuery.error && <div className="text-red-500/90 bg-red-500/10 p-3 rounded text-sm mb-4"><span className="font-medium">Context Error:</span> {flameQuery.error.message}</div>}
               {chatErrorFromSDK && <div className="text-red-500/90 bg-red-500/10 p-3 rounded text-sm mb-4"><span className="font-medium">Chat Error:</span> {chatErrorFromSDK.message}</div>}
               {combinedContentItems.length > 0 ? combinedContentItems.map(item => (
@@ -282,9 +406,15 @@ const ActiveConversationPanelComponent: React.FC<ActiveConversationPanelProps> =
                   id={`message-item-${item.message.id}`} item={item} globalActiveAgentId={globalActiveAgentId} isDebug={showDebugInfo}
                   isStreaming={item.message.role === 'assistant' && item.message.id === vercelMessages[vercelMessages.length -1]?.id && isSendingMessage}
                 />
-              )) : (!isSendingMessage && !chatErrorFromSDK && !flameQuery.isLoading && (
+              )) : (!isSendingMessage && !chatErrorFromSDK && (
                 <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                  <p className="text-sm text-[var(--text-muted)]">{flameQuery.data?.dayDefinition ? 'The Oracle awaits your words.' : 'No messages yet. Begin the dialogue.'}</p>
+                  <p className="text-sm text-[var(--text-muted)]">
+                    {flameQuery.data?.processing 
+                      ? 'Setting up your conversation. You can begin chatting now.' 
+                      : (flameQuery.data?.dayDefinition 
+                          ? 'The Oracle awaits your words.' 
+                          : 'No messages yet. Begin the dialogue.')}
+                  </p>
                 </div>
               ))}
               {isSendingMessage && vercelMessages[vercelMessages.length -1]?.role === 'assistant' && vercelMessages[vercelMessages.length -1]?.content === "" && (
@@ -293,7 +423,8 @@ const ActiveConversationPanelComponent: React.FC<ActiveConversationPanelProps> =
               <div ref={messagesEndRef} aria-hidden="true" style={{ height: '1px' }} />
             </div>
             <ChatInputBar onFormSubmit={handleSubmitMessage} inputValue={input} onInputChange={handleInputChange}
-              isProcessing={isSendingMessage} disabled={!activeQuestId || isSendingMessage || flameQuery.isLoading}
+              isProcessing={isSendingMessage} 
+              disabled={!activeQuestId || isSendingMessage}
               placeholderText={activeConversation ? `Message ${activeConversation.name}...` : 'Select a conversation'}
               className="flex-shrink-0" />
           </div>

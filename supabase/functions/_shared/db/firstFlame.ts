@@ -1,144 +1,321 @@
-/*
- * ⚠  RLS note:
- *  The helper runs with the Supabase **service_role** key.
- *  That role is _not_ a superuser and does **NOT** bypass RLS.
- *  Production expects an `ON ritual.quests FOR ALL TO service_role USING (true)` policy.
- *  If you change the helper to touch other tables, add the matching
- *  `… TO service_role USING (true)` policy in the migration.
- */
-// supabase/functions/_shared/db/firstFlame.ts
-import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'; // Keep if admin client is explicitly typed SupabaseClient
-import { FIRST_FLAME_SLUG } from '../5dayquest/FirstFlame.ts';
-// day1Content is no longer directly used in this version of the helper,
-// as title is now passed by the caller or defaults if not provided.
+/* -------------------------------------------------------------
+ * supabase/functions/_shared/db/firstFlame.ts
+ *
+ * Helpers for creating / loading the First-Flame quest and the
+ * per-user flame_progress row, with duplicate-insert protection.
+ *
+ * ⚠  RLS NOTE
+ *    These helpers run with the **service_role** key.  That role
+ *    is *not* a super-user and does **NOT** bypass RLS.  
+ *    Production therefore needs an explicit policy such as:
+ *
+ *      ALTER POLICY ... ON ritual.quests
+ *        FOR  ALL  TO service_role USING ( true );
+ *
+ * ----------------------------------------------------------- */
 
-/**
- * Defines the minimal structure of a quest row, primarily what is returned
- * by the getOrCreateFirstFlame helper after ensuring the quest exists.
- * This interface focuses on the essential identifiers and core type information.
- * RLS policies on 'quests' table should allow access based on user participation
- * (via quest_participants linking user_id to quest_id (UUID)).
- */
-export interface QuestRow {
-  id: string;          // UUID PK
-  slug: string;        // unique text (e.g., 'first-flame-ritual')
-  title: string;       // Title of the quest
-  type: string;        // e.g., 'ritual'
-  // is_pinned and realm are removed from default return as they are business logic
-  // and not essential for just getting/creating the quest entry.
-  // created_at is also removed from default to keep the payload lean.
+import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { FIRST_FLAME_SLUG }  from '../5dayquest/FirstFlame.ts';
+
+/* ------------------------------------------------------------------ */
+/*  0.  In-memory request de-dup                                      */
+/* ------------------------------------------------------------------ */
+// Keep track of in-flight requests with a 5-second expiration
+const progressTracker = new Map<
+  string,
+  { 
+    promise: Promise<{ ok: boolean; row?: any; error?: string }>,
+    timestamp: number 
+  }
+>();
+
+// Clear stale entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of progressTracker.entries()) {
+    // Remove entries older than 5 seconds
+    if (now - entry.timestamp > 5000) {
+      progressTracker.delete(key);
+    }
+  }
+}, 1000);
+
+/* ------------------------------------------------------------------ */
+/*  1.  Small utilities                                               */
+/* ------------------------------------------------------------------ */
+export function isValidUuid(str: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    str ?? ''
+  );
 }
 
-interface UpsertQuestPayload {
+async function safeUpsert<T>(
+  table: ReturnType<SupabaseClient['from']>,
+  values: T,
+  conflictCols: string[]
+): Promise<{ data: T | null; error: any }> {
+  try {
+    const { data, error } = await table
+      .upsert(values, {
+        onConflict: conflictCols.join(','),
+        ignoreDuplicates: true,
+      })
+      .select()
+      .maybeSingle();
+    return { data: data as T | null, error };
+  } catch (err) {
+    console.error('[firstFlame] safeUpsert error:', err);
+    return { data: null, error: err };
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  2.  Quest helper                                                  */
+/* ------------------------------------------------------------------ */
+export interface QuestRow {
+  id: string;
   slug: string;
   title: string;
   type: string;
-  realm?: string | null; // Optional, to be provided by caller if not default
-  is_pinned?: boolean | null; // Optional, to be provided by caller if not default
 }
 
-/**
- * Idempotently loads or creates the 'First-Flame' quest using its predefined slug.
- * This version uses a "read-first, then write-if-missing" approach.
- * It returns only the essential 'id', 'slug', 'title', and 'type' of the quest.
- *
- * @param admin - A Supabase client instance with service_role or appropriate admin rights.
- * @param payloadOverrides - Optional an object to override default title, type, or provide realm/is_pinned.
- * @returns A Promise resolving to the minimal QuestRow object for the First Flame quest.
- * @throws If the operation fails.
- *
- * Database operations are within the 'ritual' schema (assumed to be set on the client).
- */
+interface UpsertQuestPayload
+  extends Omit<QuestRow, 'id'> {
+  realm?: string | null;
+  is_pinned?: boolean | null;
+}
+
 export async function getOrCreateFirstFlame(
   admin: SupabaseClient,
-  payloadOverrides?: Partial<UpsertQuestPayload> // Allow caller to specify title, type, realm, is_pinned
+  overrides: Partial<UpsertQuestPayload> = {}
 ): Promise<QuestRow> {
-  const selectCols = 'id, slug, title, type'; // Minimal essential columns
+  try {
+    const cols = 'id, slug, title, type';
 
-  // 1. Attempt to read the quest first (fast path)
-  const { data: existingQuest, error: selectError } = await admin
-    .from('quests')
-    .select(selectCols)
-    .eq('slug', FIRST_FLAME_SLUG)
-    .maybeSingle<QuestRow>();
+    /* fast-path: read first */
+    try {
+      const { data: found, error: selErr } = await admin
+        .from('quests')
+        .select(cols)
+        .eq('slug', FIRST_FLAME_SLUG)
+        .maybeSingle<QuestRow>();
 
-  if (selectError) {
-    console.error(`[shared/db/firstFlame] Error selecting quest by slug '${FIRST_FLAME_SLUG}'. Error:`, selectError);
-    throw selectError;
+      if (selErr) {
+        console.error('[firstFlame] Error finding quest:', selErr);
+        throw selErr;
+      }
+      if (found) return found;
+    } catch (findErr) {
+      console.error('[firstFlame] Error in quest find:', findErr);
+      throw findErr;
+    }
+
+    /* slow-path: insert */
+    try {
+      const payload: UpsertQuestPayload = {
+        slug : FIRST_FLAME_SLUG,
+        title: overrides.title ?? 'First Flame Ritual',
+        type : overrides.type  ?? 'ritual',
+        realm: overrides.realm,
+        is_pinned: overrides.is_pinned,
+      };
+
+      const { data: created, error: insErr } = await admin
+        .from('quests')
+        .insert(payload)
+        .select(cols)
+        .single<QuestRow>();
+
+      if (insErr) {
+        console.error('[firstFlame] Error inserting quest:', insErr);
+        throw insErr;
+      }
+      if (!created) {
+        throw new Error('Insert returned no data');
+      }
+
+      return created;
+    } catch (insertErr) {
+      console.error('[firstFlame] Error in quest insert:', insertErr);
+      throw insertErr;
+    }
+  } catch (err) {
+    console.error('[firstFlame] getOrCreateFirstFlame error:', err);
+    throw err;
   }
-
-  if (existingQuest) {
-    // console.debug(`[shared/db/firstFlame] Found existing quest for slug '${FIRST_FLAME_SLUG}'. ID: ${existingQuest.id}`);
-    return existingQuest;
-  }
-
-  // 2. Quest not found, proceed to insert (slower path)
-  // console.debug(`[shared/db/firstFlame] Quest with slug '${FIRST_FLAME_SLUG}' not found. Attempting to insert.`);
-
-  const insertPayload: UpsertQuestPayload = {
-    slug: FIRST_FLAME_SLUG,
-    title: payloadOverrides?.title ?? 'First Flame Ritual', // Default title, can be overridden
-    type: payloadOverrides?.type ?? 'ritual', // Default type, can be overridden
-    realm: payloadOverrides?.realm, // Pass from caller or undefined
-    is_pinned: payloadOverrides?.is_pinned, // Pass from caller or undefined
-  };
-
-  const { data: newQuest, error: insertError } = await admin
-    .from('quests')
-    .insert(insertPayload)
-    .select(selectCols) // Select the same minimal columns
-    .single<QuestRow>();
-
-  if (insertError || !newQuest) {
-    console.error(
-        `[shared/db/firstFlame] CRITICAL: Insert failed for slug '${FIRST_FLAME_SLUG}'. Error: ${JSON.stringify(insertError)}, Data: ${JSON.stringify(newQuest)}`
-    );
-    throw insertError ?? new Error(`getOrCreateFirstFlame: Insert for slug '${FIRST_FLAME_SLUG}' failed or returned no data.`);
-  }
-  // console.debug(`[shared/db/firstFlame] Successfully inserted quest for slug '${FIRST_FLAME_SLUG}'. ID: ${newQuest.id}`);
-  return newQuest;
 }
 
-
-/**
- * getOrCreateFirstFlameProgress
- * -----------------------------------------------------
- * Ensure a flame_progress row exists for the given user.
- * Inserts `current_day_target = 1` if missing. Caller must
- * provide the quest id (typically from getOrCreateFirstFlame).
- */
+/* ------------------------------------------------------------------ */
+/*  3.  flame_progress helper                                         */
+/* ------------------------------------------------------------------ */
 export async function getOrCreateFirstFlameProgress(
   admin: SupabaseClient,
   userId: string,
-  questId: string,
-): Promise<void> {
-  const { error } = await admin
-    .from('flame_progress')
-    .upsert(
-      {
-        quest_id: questId,
-        user_id: userId,
-        current_day_target: 1,
-        is_quest_complete: false,
-      },
-      { onConflict: 'quest_id,user_id', ignoreDuplicates: true },
-    );
+  questId: string
+): Promise<{ ok: boolean; row?: any; error?: string }> {
+  try {
+    if (!isValidUuid(userId)) {
+      console.warn('[firstFlame] skipping non-UUID user:', userId);
+      return { ok: true, error: 'DEMO_USER_SKIP' };
+    }
 
-  if (error) {
-    console.error('[shared/db/firstFlame] flame_progress upsert error', error);
-    throw error;
+    // First, ensure the quest exists
+    try {
+      let actualQuestId = questId;
+      
+      // Check if questId is a UUID or a slug
+      if (!isValidUuid(questId)) {
+        console.log(`[firstFlame] questId "${questId}" is not a UUID, treating as slug`);
+        
+        // Try to find quest by slug
+        const { data: questBySlug, error: slugErr } = await admin
+          .from('quests')
+          .select('id')
+          .eq('slug', questId)
+          .maybeSingle();
+          
+        if (slugErr) {
+          console.error('[firstFlame] Error finding quest by slug:', slugErr);
+          return { ok: false, error: `Failed to find quest by slug: ${slugErr.message}` };
+        }
+        
+        if (questBySlug) {
+          // Found by slug, use its ID
+          actualQuestId = questBySlug.id;
+          console.log(`[firstFlame] Found quest by slug, using ID: ${actualQuestId}`);
+        } else {
+          // Quest not found by slug, create it
+          console.log(`[firstFlame] Quest not found by slug "${questId}", creating it`);
+          try {
+            // This will find or create the quest
+            const quest = await getOrCreateFirstFlame(admin, { 
+              realm: 'first_flame',
+              is_pinned: true 
+            });
+            // Update actualQuestId to the actual quest ID
+            actualQuestId = quest.id;
+            console.log(`[firstFlame] Created quest with ID: ${actualQuestId} (slug: ${quest.slug})`);
+          } catch (createErr) {
+            console.error('[firstFlame] Error creating quest:', createErr);
+            return { ok: false, error: `Failed to create quest: ${createErr.message}` };
+          }
+        }
+      } else {
+        // Try to find the quest by ID since it's a UUID
+        const { data: quest, error: questErr } = await admin
+          .from('quests')
+          .select('id')
+          .eq('id', actualQuestId)
+          .maybeSingle();
+        
+        if (questErr) {
+          console.error('[firstFlame] Error finding quest:', questErr);
+          return { ok: false, error: `Failed to find quest: ${questErr.message}` };
+        }
+        
+        // If quest doesn't exist by ID, create it
+        if (!quest) {
+          console.warn('[firstFlame] Quest not found by ID, creating new quest');
+          try {
+            // This will find or create the quest
+            const quest = await getOrCreateFirstFlame(admin, { 
+              realm: 'first_flame',
+              is_pinned: true 
+            });
+            // Update actualQuestId to the actual quest ID
+            actualQuestId = quest.id;
+            console.log(`[firstFlame] Using quest ID: ${actualQuestId} (slug: ${quest.slug})`);
+          } catch (createErr) {
+            console.error('[firstFlame] Error creating quest:', createErr);
+            return { ok: false, error: `Failed to create quest: ${createErr.message}` };
+          }
+        }
+      }
+      
+      // Use actualQuestId for the rest of the function
+      questId = actualQuestId;
+    } catch (questCheckErr) {
+      console.error('[firstFlame] Error checking quest:', questCheckErr);
+      return { ok: false, error: `Quest check failed: ${questCheckErr.message}` };
+    }
+
+    const key = `${userId}:${questId}`;
+    if (progressTracker.has(key)) {
+      console.log(`[firstFlame] Using cached promise for ${key}`);
+      return progressTracker.get(key)!.promise;
+    }
+
+    const promise = (async () => {
+      try {
+        /* already exists? --------------------------------------------------- */
+        const { data: existing, error: selErr } = await admin
+          .from('flame_progress')
+          .select('*')
+          .eq('quest_id', questId)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (selErr) {
+          console.error('[firstFlame] Error finding progress:', selErr);
+          return { ok: false, error: selErr.message };
+        }
+        if (existing) {
+          console.log('[firstFlame] Found existing progress');
+          return { ok: true, row: existing, error: 'EXISTING' };
+        }
+
+        /* insert new row ---------------------------------------------------- */
+        console.log(`[firstFlame] Creating new progress for user ${userId}, quest ${questId}`);
+        const { data: row, error } = await safeUpsert(
+          admin.from('flame_progress'),
+          {
+            quest_id: questId,
+            user_id : userId,
+            current_day_target: 1,
+            is_quest_complete : false,
+            /* imprint_ref intentionally omitted – column is nullable */
+          },
+          ['quest_id', 'user_id']
+        );
+
+        if (error) {
+          console.error('[firstFlame] Error inserting progress:', error);
+          return { ok: false, error: error.message };
+        }
+        
+        console.log('[firstFlame] Successfully created new progress');
+        return { ok: true, row };
+      } catch (progressErr) {
+        console.error('[firstFlame] Error in getOrCreateFirstFlameProgress:', progressErr);
+        return { ok: false, error: progressErr.message };
+      }
+    })();
+
+    // Store both the promise and the current timestamp
+    progressTracker.set(key, { 
+      promise, 
+      timestamp: Date.now() 
+    });
+    
+    return promise;
+  } catch (outerErr) {
+    console.error('[firstFlame] Outer error in getOrCreateFirstFlameProgress:', outerErr);
+    return { ok: false, error: outerErr.message };
   }
 }
 
-/** @deprecated – use getOrCreateFirstFlame */
-export const ensureFirstFlameQuest = async (
-  admin: SupabaseClient,
-): Promise<{ id: string }> => {
-  const { id } = await getOrCreateFirstFlame(admin, {
-    title: 'First Flame Ritual',
-    type: 'ritual',
-    realm: 'first_flame',
-    is_pinned: true,
-  });
-  return { id };
+/* ------------------------------------------------------------------ */
+/*  4.  Legacy alias                                                  */
+/* ------------------------------------------------------------------ */
+export const ensureFirstFlameQuest = async (admin: SupabaseClient) => {
+  try {
+    const { id } = await getOrCreateFirstFlame(admin, {
+      realm: 'first_flame',
+      is_pinned: true,
+    });
+    return { id };
+  } catch (err) {
+    console.error('[firstFlame] Error in ensureFirstFlameQuest:', err);
+    throw err;
+  }
 };

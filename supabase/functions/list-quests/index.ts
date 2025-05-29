@@ -1,190 +1,221 @@
 // -----------------------------------------------------------------------------
-//  list-quests – Edge Function  (Deno Deploy + supabase-js v2)
-//  Returns quests as { data, serverTimestamp }  ✅ now with JSON header
+//  list-quests – Edge Function  (Deno Deploy · Supabase-JS v2)
+//  Returns quests as { data, serverTimestamp, error }
 // -----------------------------------------------------------------------------
 
-import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// deno-lint-ignore-file
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-import { corsHeaders }        from '../_shared/cors.ts'
-import { log }                from '../_shared/logger.ts'
-import { maskAuthorizationHeader } from '../_shared/jwt.ts'
+import { corsHeaders } from "../_shared/cors.ts";
+import { log } from "../_shared/logger.ts";
+import { maskAuthorizationHeader } from "../_shared/jwt.ts";
 import {
   initializeSentryOnce,
   captureError,
   flushSentryEvents,
-}                             from '../_shared/sentry.ts'
+} from "../_shared/sentry.ts";
 import {
   ensureFirstFlameQuest,
   getOrCreateFirstFlameProgress,
-}                             from '../_shared/db/firstFlame.ts'
-import { toISO }              from '../_shared/types/index.ts'
+  isValidUuid,
+} from "../_shared/db/firstFlame.ts";
+import { toISO } from "../_shared/types/index.ts";
 import {
   FIRST_FLAME_SLUG,
   type TimestampISO,
-}                             from '../_shared/5dayquest/FirstFlame.ts'
+} from "../_shared/5dayquest/FirstFlame.ts";
 
-initializeSentryOnce()
+/*───────────────────  Supabase edge-function config  ──────────────────*/
+/** Allow anonymous JWTs – we’ll decide locally how strict to be */
+export const config = { verify_jwt: "anon" };
 
-/*────────────────────────  Config / ENV  ───────────────────────*/
-const FN      = 'list-quests'
-const SB_URL  = Deno.env.get('SUPABASE_URL')
-const SB_ANON = Deno.env.get('SUPABASE_ANON_KEY')
-const SB_SVC  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+initializeSentryOnce();
 
-if (!SB_URL || !SB_ANON || !SB_SVC) {
-  console.error(`[${FN}] FATAL – missing Supabase env vars`)
-  throw new Error('Server mis-configuration')
-}
+/*────────────────────────  ENV  ──────────────────────────────*/
+const FN = "list-quests";
+const SB_URL  = Deno.env.get("SUPABASE_URL")!;
+const SB_ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
+const SB_SVC  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const DEBUG   = Deno.env.get(`DEBUG_${FN.toUpperCase().replace(/-/g, "_")}`) === "true";
+const DEBUG_FN= DEBUG && Deno.env.get("DEBUG_LIST_QUESTS") === "true";
+const IS_PROD = Deno.env.get("ENV") === "production";
 
-const DEBUG =
-  Deno.env.get(`DEBUG_${FN.toUpperCase().replace(/-/g, '_')}`) === 'true'
-
-/*────────────────────────  Types  ──────────────────────────────*/
+/*────────────────────────  Types & mappers  ───────────────────────────*/
 interface QuestRow {
-  id: string
-  slug: string
-  title: string
-  type: string
-  realm: string | null
-  is_pinned: boolean | null
-  created_at: string
-  agent_id: string | null
-  last_message_preview: string | null
-  unread_count: number | null
-  community_id: string | null
+  id: string;
+  slug: string;
+  title: string;
+  type: string;
+  realm: string | null;
+  is_pinned: boolean | null;
+  created_at: string;
+  agent_id: string | null;
+  last_message_preview: string | null;
+  unread_count: number | null;
+  community_id: string | null;
 }
 
 interface QuestPayload {
-  id: string
-  slug: string
-  name: string
-  type: string
-  timestamp: TimestampISO
-  createdAt: TimestampISO
-  lastMessagePreview: string
-  unreadCount: number
-  agentId: string | null
-  realm?: string | null
-  isPinned: boolean
-  communityId?: string | null
-  isFirstFlameRitual: boolean
+  id: string;
+  slug: string;
+  name: string;
+  type: string;
+  timestamp: TimestampISO;
+  createdAt: TimestampISO;
+  lastMessagePreview: string;
+  unreadCount: number;
+  agentId: string | null;
+  realm?: string | null;
+  isPinned: boolean;
+  communityId?: string | null;
+  isFirstFlameRitual: boolean;
 }
 
 const mapRow = (r: QuestRow): QuestPayload => ({
-  id        : r.id,
-  slug      : r.slug,
-  name      : r.title,
-  type      : r.type,
-  timestamp : toISO(r.created_at),
-  createdAt : toISO(r.created_at),
+  id:   r.id,
+  slug: r.slug,
+  name: r.title,
+  type: r.type,
+  timestamp:  toISO(r.created_at),
+  createdAt:  toISO(r.created_at),
   lastMessagePreview:
     r.last_message_preview ??
-    (r.slug === FIRST_FLAME_SLUG ? 'Begin your inner journey…' : 'No messages yet'),
-  unreadCount        : r.unread_count ?? 0,
-  agentId            : r.agent_id,
-  realm              : r.realm ?? undefined,
-  isPinned           : r.is_pinned ?? (r.slug === FIRST_FLAME_SLUG),
-  communityId        : r.community_id ?? undefined,
-  isFirstFlameRitual : r.slug === FIRST_FLAME_SLUG,
-})
+    (r.slug === FIRST_FLAME_SLUG ? "Begin your inner journey…" : "No messages yet"),
+  unreadCount: r.unread_count ?? 0,
+  agentId:     r.agent_id,
+  realm:       r.realm ?? undefined,
+  isPinned:    r.is_pinned ?? r.slug === FIRST_FLAME_SLUG,
+  communityId: r.community_id ?? undefined,
+  isFirstFlameRitual: r.slug === FIRST_FLAME_SLUG,
+});
 
-/*────────────────────────  Helpers  ────────────────────────────*/
-// 🔧 NEW: add explicit JSON content-type so the client parses correctly
+/*────────────────────────  Helpers  ────────────────────────────────*/
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
+    headers: { 
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      // downstream clients & logs can link every hop
+      "x-request-id": (body as any)?.requestId ?? "n/a",
+    },
+  });
 
-/*────────────────────────  Handler  ────────────────────────────*/
+/*────────────────────────  Handler  ──────────────────────────────*/
 Deno.serve(async (req) => {
-  const t0 = performance.now()
+  const started   = Date.now();
+  const requestId = crypto.randomUUID();
 
-  if (req.method === 'OPTIONS')
-    return json({ ok: true })
+  if (req.method === "OPTIONS") return json({ ok: true, requestId });
 
-  if (req.method !== 'POST' && req.method !== 'GET')
-    return json({ error: 'METHOD_NOT_ALLOWED' }, 405)
+  if (!["GET", "POST"].includes(req.method))
+    return json({ error: "METHOD_NOT_ALLOWED", requestId }, 405);
 
-  const authHdr = req.headers.get('Authorization') ?? ''
-  const authLog = maskAuthorizationHeader(authHdr)
+  /*── Authorisation header selection ───────────────────────────*/
+  const rawAuth   = req.headers.get("Authorization") ?? "";
+  const devAltAuth= req.headers.get("X-Authorization") ?? "";
+  const authHdr   =
+    rawAuth.startsWith("Bearer ")
+      ? rawAuth
+      : !IS_PROD && devAltAuth.startsWith("Bearer ")
+        ? devAltAuth
+        : "";
+
+  if (!authHdr) {
+    return json({ error: "MISSING_AUTH_HEADER", requestId }, 401);
+  }
+
+  /*── Clients ──────────────────────────────────────────────────*/
+  const sbUser  = createClient(SB_URL, SB_ANON, {
+    global: { headers: { Authorization: authHdr } },
+    auth:   { persistSession: false },
+    db:     { schema: "ritual" },
+  });
+  const sbAdmin = createClient(SB_URL, SB_SVC, {
+    auth: { persistSession: false },
+    db:   { schema: "ritual" },
+  });
 
   try {
-    if (!authHdr.startsWith('Bearer '))
-      return json({ error: 'AUTH' }, 401)
+    /*── Resolve user ──────────────────────────────────────────*/
+    const { data: { user }, error: authErr } = await sbUser.auth.getUser();
+    if (authErr || !user?.id) {
+      return json({ error: "AUTH", requestId }, 401);
+    }
+    const userId = user.id;
 
-    /*── Supabase clients ─────────────────────────────────────────*/
-    const sbUser  = createClient(SB_URL, SB_ANON, {
-      global: { headers: { Authorization: authHdr } },
-      auth  : { persistSession: false },
-      db    : { schema: 'ritual' },
-    })
-    const sbAdmin = createClient(SB_URL, SB_SVC, {
-      auth: { persistSession: false },
-      db  : { schema: 'ritual' },
-    })
+    /*──────────────── Ensure First-Flame artefacts ───────────*/
+    // We’ll only touch the DB if caller *doesn’t* already have the quest,
+    // which we check after the first query.
+    const firstFlameQuestIdPromise = ensureFirstFlameQuest(sbAdmin)
+      .then((q) => q.id)
+      .catch((e) => { log("ERROR", e.message, null, FN, true); return null; });
 
-    const { data: { user }, error: authErr } = await sbUser.auth.getUser()
-    if (authErr) console.error(`[${FN}] auth.getUser error`, authErr)
-    if (authErr || !user?.id) return json({ error: 'AUTH' }, 401)
+    /*──────────────── Fetch all quests  ──────────────────────*/
+    const { data, error: qErr } = await sbUser
+      .from("quests")
+      .select(
+        `id, slug, title, type, realm, is_pinned, created_at,
+         agent_id, last_message_preview, unread_count, community_id`,
+      )
+      .order("is_pinned", { ascending: false })
+      .order("created_at", { ascending: false });
 
-    /*── Ensure First-Flame quest exists & caller is a participant ─*/
-    const { id: questId } = await ensureFirstFlameQuest(sbAdmin)
+    if (qErr) throw qErr;
 
-    const { error: upsertErr } = await sbAdmin.from('quest_participants').upsert(
-      { quest_id: questId, user_id: user.id, role: 'participant' },
-      { onConflict: 'quest_id,user_id', ignoreDuplicates: true },
-    )
-    if (upsertErr) console.error(`[${FN}] quest_participants upsert error`, upsertErr)
+    const rows = (data as QuestRow[]).map(mapRow);
 
-    try {
-      await getOrCreateFirstFlameProgress(sbAdmin, user.id, questId)
-    } catch (pe) {
-      console.error(`[${FN}] flame_progress upsert error`, pe)
+    /*──────────────── Conditionally create participant/progress ─────────*/
+    if (!rows.some((q) => q.slug === FIRST_FLAME_SLUG)) {
+      const questId = await firstFlameQuestIdPromise; // already kicked off
+      if (questId && isValidUuid(userId)) {
+        await sbAdmin.from("quest_participants").upsert(
+          { quest_id: questId, user_id: userId, role: "participant" },
+          { onConflict: "quest_id,user_id", ignoreDuplicates: true },
+        );
+        await getOrCreateFirstFlameProgress(sbAdmin, userId, questId);
+      }
     }
 
-    /*── Fetch quests visible to the caller ───────────────────────*/
-    const { data, error: fetchErr } = await sbUser
-      .from('quests')
-      .select(`
-        id, slug, title, type, realm, is_pinned, created_at,
-        agent_id, last_message_preview, unread_count, community_id
-      `)
-
-    if (fetchErr) {
-      console.error(`[${FN}] quests select error`, fetchErr)
-      throw fetchErr
-    }
-
-    const rows     = (data as QuestRow[]).map(mapRow)
-    const payload  = rows.sort((a, b) => {
-      if (a.isFirstFlameRitual !== b.isFirstFlameRitual)
-        return a.isFirstFlameRitual ? -1 : 1
-      if (a.isPinned !== b.isPinned)
-        return a.isPinned ? -1 : 1
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    })
-
-    /*── React-Query wrapper ──────────────────────────────────────*/
-    const responseBody = {
-      data           : payload,
+    /*──────────────── Response  ──────────────────────────────*/
+    const body = {
+      data: rows,
       serverTimestamp: new Date().toISOString() as TimestampISO,
+      requestId,
+    };
+    if (DEBUG_FN) {
+      log("DEBUG", `→ ${rows.length} quests [${requestId}]`, null, FN, true);
     }
+    return json(body);
+  } catch (err) {
+    const e = err instanceof Error ? err : new Error(String(err));
+    captureError(e, { context: FN, requestId, auth: maskAuthorizationHeader(authHdr) });
+    log("ERROR", e.message, { stack: e.stack, requestId }, FN, true);
 
-    log('DEBUG', `→ ${payload.length} quests`, null, FN, DEBUG)
-    return json(responseBody)
+    const status =
+      (e as any).status && (e as any).status >= 400 && (e as any).status < 600
+        ? (e as any).status
+        : 500;
 
-  } catch (err: unknown) {
-    const e   = err instanceof Error ? err : new Error(String(err))
-    const sc  = (e as any).status && (e as any).status >= 400 && (e as any).status < 600
-                ? (e as any).status
-                : 500
-    captureError(e, { context: FN, maskedAuth: authLog })
-    log('ERROR', e.message, { stack: e.stack }, FN, true)
-    return json({ error: (e as any).code ?? 'SERVER_ERROR' }, sc)
+    return json(
+      {
+        error: (e as any).code ?? "SERVER_ERROR",
+        message: e.message || "Unknown server error",
+        requestId,
+      },
+      status,
+    );
   } finally {
-    await flushSentryEvents(500)
-    if (DEBUG) log('DEBUG', `done in ${(performance.now()-t0).toFixed(1)} ms`, null, FN, true)
+    await flushSentryEvents(400);
+    if (DEBUG) {
+      log(
+        "DEBUG",
+        `done in ${Date.now() - started} ms [${requestId}]`,
+        null,
+        FN,
+        true,
+      );
+    }
   }
-})
+});

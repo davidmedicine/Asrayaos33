@@ -301,10 +301,49 @@ const ChatContextPanelComponent: React.FC<{
 
 
   const currentPanelState: PanelState = useMemo(() => {
+    // Log the panel state conditions
+    console.log("[ChatContextPanel] Determining panel state:", {
+      activeQuestId,
+      hasQuestCtx: !!questCtx,
+      hasFlameData: !!flameQuery.data,
+      hasDayDefinition: !!flameQuery.data?.dayDefinition,
+      hasOverallProgress: !!flameQuery.data?.overallProgress,
+      isLoadingFromSlice,
+      flameQueryLoading: flameQuery.isLoading,
+      questCtxQueryLoading: questCtxQuery.isLoading,
+      isProcessing: flameQuery.data?.processing
+    });
+    
     if (!activeQuestId) return 'resting';
-    if (isLoadingFromSlice) return 'loading';
+    
+    // PRIORITY 1: If we have a day definition, always show content immediately
+    // Even if we're still in the processing state
+    if (flameQuery.data?.dayDefinition) {
+      console.log("[ChatContextPanel] Found day definition, showing loaded state");
+      return 'loaded';
+    }
+    
+    // PRIORITY 2: If we already have context data from any source, show it
+    if (questCtx) return 'loaded';
+    
+    // PRIORITY 3: If we have partial data like overall progress, show loaded state
+    // to avoid flickering back to loading state
+    if (flameQuery.data?.overallProgress) {
+      console.log("[ChatContextPanel] Found overall progress, showing loaded state");
+      return 'loaded';
+    }
+    
+    // PRIORITY 4: If we're actively loading data and have nothing to show
+    if (isLoadingFromSlice || flameQuery.isLoading || questCtxQuery.isLoading) {
+      console.log("[ChatContextPanel] Still loading data, showing loading state");
+      return 'loading';
+    }
+    
+    // PRIORITY 5: If we have an active quest ID but no data yet, still show loaded state
+    // This shows the retry option or empty state for better UX than a perpetual loader
+    console.log("[ChatContextPanel] No data yet, showing empty loaded state with retry option");
     return 'loaded';
-  }, [activeQuestId, isLoadingFromSlice]);
+  }, [activeQuestId, isLoadingFromSlice, questCtx, flameQuery.data, flameQuery.isLoading, questCtxQuery.isLoading]);
 
   useLayoutEffect(() => {
     if (
@@ -364,9 +403,46 @@ const ChatContextPanelComponent: React.FC<{
         >
           <h3 className="font-semibold section-header">Error Loading Context</h3>
           <p className="section-summary">{ctxErr}</p>
+          <button 
+            onClick={() => flameQuery.refetch()}
+            className="mt-4 px-4 py-2 bg-[var(--bg-primary-dark)] text-[var(--text-primary)] rounded-md hover:bg-[var(--bg-primary-hover)] transition-colors"
+          >
+            Retry
+          </button>
         </div>
       );
     }
+    
+    // Use partial data from flameQuery if available, even when questCtx is null
+    if (!questCtx && flameQuery.data?.dayDefinition) {
+      const dayDef = flameQuery.data.dayDefinition;
+      return (
+        <div className="p-6 space-y-6 custom-scrollbar focusRing" data-testid="context-loaded-from-partial">
+          <header>
+            <h2 className="text-2xl font-bold text-[var(--text-heading)] section-header" data-testid="context-title">
+              Day {dayDef.ritualDay}: {dayDef.title}
+            </h2>
+            <p className="text-sm text-[var(--text-muted)] section-summary" data-testid="context-subtitle">
+              {dayDef.subtitle}
+            </p>
+            {flameQuery.data.processing && (
+              <div className="mt-2 text-amber-500 text-sm font-medium">
+                Loading complete context...
+              </div>
+            )}
+          </header>
+          <section aria-labelledby="flame-theme-title">
+            <h3 id="flame-theme-title" className="text-xl font-semibold text-[var(--text-primary)] mb-2 section-header">
+              {dayDef.theme}
+            </h3>
+            <p className="text-[var(--text-secondary)] mb-4 section-summary">
+              {dayDef.intention}
+            </p>
+          </section>
+        </div>
+      );
+    }
+    
     if (!questCtx) {
       return (
         <div
@@ -375,6 +451,12 @@ const ChatContextPanelComponent: React.FC<{
           data-testid="context-no-data"
         >
           Context data is unavailable. Please select another quest or try again.
+          <button 
+            onClick={() => flameQuery.refetch()}
+            className="mt-4 px-4 py-2 bg-[var(--bg-primary-dark)] text-[var(--text-primary)] rounded-md block hover:bg-[var(--bg-primary-hover)] transition-colors"
+          >
+            Retry Loading
+          </button>
         </div>
       );
     }

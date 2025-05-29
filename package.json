@@ -4,6 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbo",
+    "dev:temporal": "docker compose -f docker/docker-compose.temporal.yml up -d --remove-orphans && chmod +x ./scripts/check-temporal.sh && ./scripts/check-temporal.sh",
+    "dev:worker": "cd temporal-worker && TEMPORAL_ADDRESS=localhost:7233 pnpm exec ts-node src/worker.ts",
+    "supa:serve": "supabase functions serve --no-verify-jwt",
+    "dev:all": "concurrently \"pnpm dev:temporal\" \"pnpm dev:worker\" \"pnpm supa:serve\" \"pnpm dev\"",
+    "dev:stack": "pnpm dev:temporal && (concurrently \"pnpm dev:worker\" \"pnpm supa:serve\" \"pnpm dev\")",
+    "test:integration": "cd supabase/tests && deno test --allow-net --allow-env --unstable get-flame-status.local.test.ts",
     "validate:lore": "ts-node --transpile-only scripts/validate-lore.ts",
     "prebuild": "pnpm run validate:lore",
     "build": "next build",
@@ -13,9 +19,12 @@
     "clean": "rm -rf .next",
     "format": "prettier --write .",
     "analyze": "ANALYZE=true next build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "logs:fn": "supabase functions logs --fn-name",
+    "workflow:trigger": "ts-node --transpile-only scripts/workflow-trigger.ts"
   },
   "dependencies": {
+    "@anthropic-ai/claude-code": "^1.0.1",
     "@gsap/react": "2.1.2",
     "@heroicons/react": "^2.2.0",
     "@phosphor-icons/react": "^2.1.7",
@@ -37,8 +46,10 @@
     "@tanstack/react-query": "^5.75.2",
     "@tanstack/react-query-devtools": "^5.75.7",
     "@tanstack/react-virtual": "^3.13.6",
+    "@temporalio/client": "^1.11.8",
     "ai": "^4.3.14",
     "autoprefixer": "^10.4.21",
+    "axios": "^1.9.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.41.0",
@@ -71,20 +82,21 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@testing-library/jest-dom": "^6.1.5",
+    "@testing-library/react": "^14.2.1",
     "@types/js-cookie": "^3.0.6",
     "@types/node": "^22.15.17",
+    "concurrently": "^8.2.2",
     "dotenv": "^16.5.0",
     "drizzle-kit": "^0.31.0",
     "eslint": "^9",
     "eslint-config-next": "15.3.0",
-    "@testing-library/react": "^14.2.1",
-    "@testing-library/jest-dom": "^6.1.5",
     "jsdom": "^24.0.0",
-    "vitest": "^1.5.0",
     "supabase": "^2.22.6",
     "tailwindcss": "^4.1.3",
     "tailwindcss-logical": "^4.0.0",
     "ts-node": "^10.9.2",
+    "vitest": "^1.5.0",
     "zod": "^3.24.3"
   }
 }

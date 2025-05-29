@@ -1,0 +1,62 @@
+# docker/docker-compose.temporal.yml
+services:
+  temporal-postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_DB: temporal
+    ports:
+      - "5432:5432"
+    volumes:
+      - temporal-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - temporal-net
+
+  temporal-dev:
+    image: temporalio/auto-setup:1.22.0
+    environment:
+      DB: "postgres12"
+      DB_PORT: "5432"
+      POSTGRES_USER: "temporal"
+      POSTGRES_PWD: "temporal"
+      POSTGRES_SEEDS: "temporal-postgres"
+      DYNAMIC_CONFIG_FILE_PATH: /temporal-config.yaml
+      SKIP_DEFAULT_NAMESPACE_CREATION: "false"
+      NUM_HISTORY_SHARDS: "4"  # Default is 512, lower for dev
+    volumes:
+      - ${PWD}/docker/temporal-config/dynamicconfig.yaml:/temporal-config.yaml:ro
+    ports:
+      - "7233:7233"   # gRPC
+      - "7234:7234"   # internode
+    depends_on:
+      temporal-postgres:
+        condition: service_healthy
+    networks:
+      - temporal-net
+
+  temporal-web:
+    image: temporalio/ui:2.8.0
+    environment:
+      TEMPORAL_ADDRESS: temporal-dev:7233
+      TEMPORAL_PERMIT_WRITE_APIS: "true"
+    ports:
+      - "8233:8080"
+    depends_on:
+      - temporal-dev
+    networks:
+      - temporal-net
+
+volumes:
+  temporal-postgres:
+    driver: local
+
+networks:
+  temporal-net:
+    name: temporal-net
+    driver: bridge

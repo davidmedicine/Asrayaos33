@@ -25,14 +25,33 @@ First, install the dependencies:
 npm install
 # or
 yarn
+# or
+pnpm install
 ```
 
-Then, run the development server:
+### Environment Setup
+
+Create a `.env.local` file in the project root with the necessary environment variables:
+
+```
+# Required for Temporal worker
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+```
+
+You can get the service role key from your Supabase project settings.
+
+### Running the Application
+
+For the complete stack with Temporal workflow support:
 
 ```bash
-npm run dev
-# or
-yarn dev
+pnpm dev:stack
+```
+
+Or for just the frontend:
+
+```bash
+pnpm dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.

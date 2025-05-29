@@ -16,7 +16,13 @@ export function log(
     functionName: string = 'UNKNOWN_FUNCTION',
     isDebugMode: boolean = false
   ): void {
-    if (level === 'ERROR' || level === 'WARN' || (isDebugMode && (level === 'INFO' || level === 'DEBUG'))) {
+    // Global debug flag for all First Flame functions
+    const DEBUG_FIRST_FLAME = Deno.env.get('DEBUG_FIRST_FLAME') === 'true';
+    
+    // Use either function-specific debug flag OR global First Flame debug flag
+    const shouldLog = isDebugMode || DEBUG_FIRST_FLAME || level === 'ERROR' || level === 'WARN';
+    
+    if (shouldLog) {
       const logData = data instanceof Error
         ? { message: data.message, stack: data.stack, code: (data as any).code, name: (data as any).name, ...data }
         : data;

@@ -1,0 +1,21 @@
+# docker/temporal-config/custom.yaml
+# Dynamic-config values that Temporal reads at start-up
+# ──────────────────────────────────────────────────────
+# -- Feature flags that ship with the SDK  ─────────────
+system.enableActivityLocalDispatch:
+  - value: true
+system.enableEagerWorkflowStart:
+  - value: true
+frontend.workerVersioningWorkflowAPIs:
+  - value: true
+frontend.workerVersioningDataAPIs:
+  - value: true
+frontend.enableUpdateWorkflowExecution:
+  - value: true
+frontend.enableUpdateWorkflowExecutionAsyncAccepted:
+  - value: true
+
+# -- Local-dev convenience flag (DON’T use in prod) ────
+system.forceSearchAttributesCacheRefreshOnRead:
+  - value: true          # lets new SearchAttributes show up instantly
+    constraints: {}      # “apply cluster-wide”

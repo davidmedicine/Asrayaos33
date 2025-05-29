@@ -1,97 +1,128 @@
-// src/activities/modal.ts
+// temporal-worker/src/activities/modal.ts
 // ────────────────────────────────────────────────────────────
-// Activities used by the `seedFirstFlame` Workflow.
-// 1️⃣ ensureFlameState  – kicks the Modal worker to create / validate
-//                        First-Flame DB rows.
-// 2️⃣ broadcastReady    – calls a Supabase Edge Function that emits a
-//                        realtime  `flame_status:ready`  broadcast.
+// Activities used by the `seedFirstFlame` workflow
 // ────────────────────────────────────────────────────────────
 import axios, { AxiosError } from 'axios';
 import { Context } from '@temporalio/activity';
 
-/*────────────────────  Helper to assert env-vars  ────────────────────*/
+/*────────────────────────  Env helpers  ───────────────────────*/
 function requireEnv(key: string): string {
   const v = process.env[key];
   if (!v) throw new Error(`[activities] Missing required env-var ${key}`);
   return v;
 }
 
-/*────────────────────  Mandatory configuration  ─────────────────────*/
-const MODAL_KICK_URL   = requireEnv('MODAL_KICK_URL');              // string
-const SUPABASE_RPC_URL = requireEnv('SUPABASE_RPC_BROADCAST_URL');  // string
-const SUPABASE_INSERT_DAY1_URL = requireEnv('SUPABASE_RPC_INSERT_DAY1_URL');
+/*───────────────────────  Config constants  ───────────────────*/
+// Default localhost URLs so the worker “just works” during local dev.
+const MODAL_KICK_URL =
+  process.env.MODAL_KICK_URL ||
+  'http://localhost:54321/functions/v1/modal_app/ensure_flame_state';
 
-/*────────────────────  Shared Axios client  ─────────────────────────*/
+const SUPABASE_RPC_URL =
+  process.env.SUPABASE_RPC_BROADCAST_URL ||
+  'http://localhost:54321/functions/v1/realtime-broadcast';
+
+const SUPABASE_INSERT_DAY1_URL =
+  process.env.SUPABASE_RPC_INSERT_DAY1_URL ||
+  'http://localhost:54321/functions/v1/insert-day1';
+
+// **Service-role key** is mandatory (Edge Functions need it to bypass RLS)
+const SUPABASE_SERVICE_ROLE_KEY = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
+
+/*────────────────────────  Shared HTTP client  ────────────────*/
+// Every request carries the service‑role JWT in both `apikey` *and* `Authorization`
+// so Kong/Gotrue never rejects us.
 const http = axios.create({
-  headers: { 'Content-Type': 'application/json' },
-  timeout: 5_000, // 5 s so Activities fail fast
+  headers: {
+    'Content-Type': 'application/json',
+    apikey: SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+  },
+  timeout: 10_000, // fail fast – 5 s
 });
 
-/*────────────────────  Activities  ─────────────────────────────────*/
+/*──────────────────────────  Types  ───────────────────────────*/
+interface InsertDay1Response {
+  ok?: boolean;
+  note?: 'DUPLICATE' | 'INSERTED';
+  rows?: number;
+  error?: string;
+}
 
-/**
- * ensureFlameState
- * --------------------------------
- * Idempotently seeds / refreshes First-Flame rows for the given user.
- */
 export interface FlameActivityParams {
   userId: string;
   questId: string;
 }
 
-export async function ensureFlameState({ userId, questId }: FlameActivityParams): Promise<void> {
+/*────────────────────────  Activities  ────────────────────────*/
+export async function ensureFlameState(
+  { userId, questId }: FlameActivityParams,
+): Promise<void> {
   const hb = setInterval(() => Context.current().heartbeat(), 20_000);
   try {
     await http.post(MODAL_KICK_URL, { user_id: userId, quest_id: questId });
   } catch (err) {
     const e = err as AxiosError;
     throw new Error(
-      `[ensureFlameState] Modal request failed – ${e.message} ` +
-        `(status ${e.response?.status ?? 'n/a'})`,
+      `[ensureFlameState] Modal request failed – ${e.message} (status ${
+        e.response?.status ?? 'n/a'})`,
     );
   } finally {
     clearInterval(hb);
   }
 }
 
-/**
- * insertDayOneMessages
- * --------------------------------
- * Inserts canned Day-1 system & prompt messages for the user.
- */
-export async function insertDayOneMessages({ userId, questId }: FlameActivityParams): Promise<void> {
+export async function insertDayOneMessages(
+  { userId, questId }: FlameActivityParams,
+): Promise<void> {
   const hb = setInterval(() => Context.current().heartbeat(), 20_000);
   try {
-    await http.post(SUPABASE_INSERT_DAY1_URL, { user_id: userId, quest_id: questId });
+    const res = await http.post<InsertDay1Response>(SUPABASE_INSERT_DAY1_URL, {
+      user_id: userId,
+      quest_id: questId,
+    });
+
+    console.log(`[insertDayOneMessages] Response: ${JSON.stringify(res.data)}`);
+
+    if (res.data?.note === 'DUPLICATE') {
+      console.log(`[insertDayOneMessages] Messages already present for ${userId}`);
+    }
   } catch (err) {
-    const e = err as AxiosError;
+    const e = err as AxiosError<InsertDay1Response>;
+
+    // Accept Edge‑Function “pseudo errors” that actually signal success
+    if (
+      e.response?.data &&
+      ['DUPLICATE', 'INSERTED'].includes(e.response.data.note ?? '')
+    ) {
+      console.log('[insertDayOneMessages] Duplicate/inserted – continuing');
+      return;
+    }
+
     throw new Error(
-      `[insertDayOneMessages] Supabase Edge Function failed – ${e.message} ` +
-        `(status ${e.response?.status ?? 'n/a'})`,
+      `[insertDayOneMessages] Edge Function failed – ${e.message} (status ${
+        e.response?.status ?? 'n/a'}). Data: ${JSON.stringify(e.response?.data)}`,
     );
   } finally {
     clearInterval(hb);
   }
 }
 
-/**
- * broadcastReady
- * --------------------------------
- * Emits `flame_status:ready` so the UI knows to refetch ritual data.
- */
-export async function broadcastReady({ userId, questId }: FlameActivityParams): Promise<void> {
+export async function broadcastReady(
+  { userId, questId }: FlameActivityParams,
+): Promise<void> {
   const hb = setInterval(() => Context.current().heartbeat(), 20_000);
   try {
     await http.post(SUPABASE_RPC_URL, {
       channel: 'flame_status',
-      event  : 'ready',
+      event: 'ready',
       payload: { user_id: userId, quest_id: questId },
     });
   } catch (err) {
     const e = err as AxiosError;
     throw new Error(
-      `[broadcastReady] Supabase Edge Function failed – ${e.message} ` +
-        `(status ${e.response?.status ?? 'n/a'})`,
+      `[broadcastReady] Broadcast failed – ${e.message} (status ${
+        e.response?.status ?? 'n/a'})`,
     );
   } finally {
     clearInterval(hb);

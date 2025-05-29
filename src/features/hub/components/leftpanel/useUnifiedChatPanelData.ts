@@ -332,6 +332,17 @@ export const useUnifiedChatPanelData = ({
       !userId
     )
       return;
+    
+    // Check if activeQuestId is already set and exists in questsArray
+    if (activeQuestId && questsArray.some(q => q.id === activeQuestId)) {
+      console.log("[useUnifiedChatPanelData] Using existing activeQuestId:", activeQuestId);
+      hasDoneInitialAutoSelect.current = true;
+      
+      // If it's the First Flame, check if we need to redirect
+      const quest = questsArray.find(q => q.id === activeQuestId);
+      if (quest?.isFirstFlameRitual) void maybeRedirectToRitualDayOne();
+      return;
+    }
 
     const explicit = initialQuestSlugToSelect
       ? questsArray.find((q) => q.slug === initialQuestSlugToSelect)
@@ -341,20 +352,24 @@ export const useUnifiedChatPanelData = ({
       questsArray.find((q) => q.isFirstFlameRitual) ||
       questsArray[0];
 
-    if (target) void selectQuestSafely(target.id);
+    if (target) {
+      console.log("[useUnifiedChatPanelData] Auto-selecting target quest:", target.id, target.slug);
+      void selectQuestSafely(target.id);
+    }
     hasDoneInitialAutoSelect.current = true;
 
-    // Check query state before prefetching to avoid redundant calls - Added by diff
+    // Check query state before prefetching to avoid redundant calls
     if (!qc.getQueryState(keyFlameStatus(userId ?? "anon"))) {
-      // userId ?? 'anon' from base, diff has (userId)
-      void qc.prefetchQuery(buildFlameStatusQueryOpts(userId ?? "anon")); // userId ?? 'anon' from base
+      void qc.prefetchQuery(buildFlameStatusQueryOpts(userId ?? "anon"));
     }
   }, [
+    activeQuestId,
     initialQuestSlugToSelect,
     listQ.isPending,
     questsArray,
     qc,
     userId,
+    maybeRedirectToRitualDayOne,
   ]);
 
   /* ------------- Error Display Effect for listQ query ----------- */

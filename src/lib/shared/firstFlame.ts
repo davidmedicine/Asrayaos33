@@ -21,7 +21,7 @@ export const FIRST_FLAME_QUEST_ID = FIRST_FLAME_SLUG;
 
 /*--------------------------------------------------------------*
  | 2 · Ritual-stage enums re-exported for convenience            |
- *   (path alias “@ritual/…” is wired in tsconfig + webpack)     |
+ *   (path alias "@ritual/…" is wired in tsconfig + webpack)     |
  *--------------------------------------------------------------*/
 export {
   STAGE_SPARK,
@@ -52,6 +52,8 @@ export const DAY1_FLAME_DEFINITION: FlameDayDefinition = day1Json;
 export type FlameProgressData = ReadonlyDeep<{
   current_day_target: number; // 1-5
   is_quest_complete: boolean;
+  last_imprint_at?: string | null;
+  updated_at?: string;
 }>;
 
 export type FlameStatusPayload = ReadonlyDeep<{
@@ -60,8 +62,15 @@ export type FlameStatusPayload = ReadonlyDeep<{
 }>;
 
 export type FlameStatusResponse =
-  | { processing: true }
-  | (ReadonlyDeep<{ processing: false; dataVersion: number }> &
+  | { 
+      processing: true; 
+      dataVersion: null;
+      estimatedRetryMs?: number; // New field to indicate when to retry
+    }
+  | (ReadonlyDeep<{ 
+      processing: false; 
+      dataVersion: number;
+    }> &
       FlameStatusPayload);
 
 /*--------------------------------------------------------------*

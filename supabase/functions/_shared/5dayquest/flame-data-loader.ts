@@ -11,7 +11,7 @@ import type {
 
 /*────────────────────────  Config  ────────────────────────*/
 const MAX_CACHE_ENTRIES = 7;      // 5 ritual days + 2 spare
-const DAYDEF_PREFIX     = './5-day/';   // 👈 NEW – sub-folder for day defs
+const DAYDEF_PREFIX     = './';   // Load from the same directory as this file
 
 /*───────────────────────  State  ──────────────────────────*/
 const dataCache   = new Map<RitualDayNumber, Readonly<FlameDayDefinition>>();
@@ -60,15 +60,38 @@ function touch(day: RitualDayNumber, def?: Readonly<FlameDayDefinition>) {
 async function fetchAndValidate(
   day: RitualDayNumber,
 ): Promise<Readonly<FlameDayDefinition>> {
-  /* Build an absolute URL that works locally & on Deno Deploy */
-  const jsonUrl = new URL(`${DAYDEF_PREFIX}day-${day}.json`, import.meta.url).href;
-
-  /* Deno 1.42+ JSON import with runtime type-safety */
-  const mod = await import(jsonUrl, { assert: { type: 'json' } });
-  const validated = FlameDayDefinitionZ.parse(mod.default) as Readonly<FlameDayDefinition>;
-
-  log('INFO', `loaded & validated ritual Day ${day}`);
-  return validated;
+  // Try multiple possible locations for the day definition files
+  const possiblePaths = [
+    `./day-${day}.json`,                   // Root directory of 5dayquest (most common)
+    `./${DAYDEF_PREFIX}day-${day}.json`,   // Current configured prefix
+    `../5dayquest/day-${day}.json`,        // Relative from _shared directory
+    `./5-day/day-${day}.json`              // 5-day subdirectory (old path)
+  ];
+  
+  let lastError: Error | null = null;
+  
+  // Try each path in sequence
+  for (const path of possiblePaths) {
+    try {
+      /* Build an absolute URL that works locally & on Deno Deploy */
+      const jsonUrl = new URL(path, import.meta.url).href;
+      
+      /* Deno 1.42+ JSON import with runtime type-safety */
+      const mod = await import(jsonUrl, { assert: { type: 'json' } });
+      const validated = FlameDayDefinitionZ.parse(mod.default) as Readonly<FlameDayDefinition>;
+      
+      log('INFO', `loaded & validated ritual Day ${day} from ${path}`);
+      return validated;
+    } catch (err) {
+      lastError = err as Error;
+      log('DEBUG', `Failed to load day definition from ${path}`, err);
+      // Continue to next path
+    }
+  }
+  
+  // If we've tried all paths and still failed, throw the last error
+  log('ERROR', `Failed to load day definition for day ${day} from all possible paths`, lastError);
+  throw lastError;
 }
 
 /*──────────────────  Public API  ───────────────────────*/

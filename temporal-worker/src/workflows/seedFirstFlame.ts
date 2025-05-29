@@ -1,7 +1,7 @@
 // src/workflows/seedFirstFlame.ts
 import * as wf from '@temporalio/workflow';
 import type * as act from '../activities';         // adjust the path if your activities live elsewhere
-import { FIRST_FLAME_QUEST_ID } from '../../../src/lib/shared/firstFlame';
+import { FIRST_FLAME_SLUG } from '../../../src/lib/shared/firstFlame';
 
 /** -------- Types -------- */
 export interface SeedFirstFlameInput {
@@ -14,10 +14,10 @@ export const seedFirstFlameSignal = wf.defineSignal<[SeedFirstFlameInput]>(
 );
 
 function getFirstFlameQuestId(): string {
-  // In this simplified worker environment the First‑Flame quest UUID is
+  // In this simplified worker environment the First‑Flame quest slug is
   // bundled at build time alongside the front-end constant.
-  // In production this could query Supabase or another service.
-  return FIRST_FLAME_QUEST_ID;
+  // The actual UUID will be looked up from the database.
+  return FIRST_FLAME_SLUG;
 }
 
 /** -------- Activity proxies --------

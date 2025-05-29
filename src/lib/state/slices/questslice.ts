@@ -34,6 +34,8 @@ const FIRST_QUEST_JUST_CREATED_SESSION_STORAGE_KEY_V1 =
   "asraya_firstQuestJustCreated";
 const FIRST_QUEST_JUST_CREATED_SESSION_STORAGE_KEY_V2 =
   "asraya_firstQuestJustCreated_v2";
+const ACTIVE_QUEST_ID_LOCAL_STORAGE_KEY =
+  "asraya_activeQuestId";
 
 export interface QuestMetadata {
   pinned?: boolean;
@@ -108,6 +110,38 @@ const loadFirstQuestFlag = (): boolean => {
   }
 };
 
+const loadActiveQuestId = (): string | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const storedId = window.localStorage.getItem(
+      ACTIVE_QUEST_ID_LOCAL_STORAGE_KEY
+    );
+    return storedId;
+  } catch (error) {
+    console.warn(
+      "[questSlice] Error reading activeQuestId from localStorage:",
+      error
+    );
+    return null;
+  }
+};
+
+const saveActiveQuestId = (id: string | null): void => {
+  if (typeof window === "undefined") return;
+  try {
+    if (id) {
+      window.localStorage.setItem(ACTIVE_QUEST_ID_LOCAL_STORAGE_KEY, id);
+    } else {
+      window.localStorage.removeItem(ACTIVE_QUEST_ID_LOCAL_STORAGE_KEY);
+    }
+  } catch (error) {
+    console.warn(
+      "[questSlice] Error saving activeQuestId to localStorage:",
+      error
+    );
+  }
+};
+
 const saveFirstQuestFlag = (value: boolean): void => {
   if (typeof window === "undefined") return;
   try {
@@ -164,7 +198,7 @@ function pruneQuestsWithPinning(quests: Quest[], maxUnpinned: number): Quest[] {
  * 3. Initial State
  * ------------------------------------------------------------------------ */
 const INITIAL_QUEST_SLICE_STATE: QuestSliceState = {
-  activeQuestId: null,
+  activeQuestId: typeof window !== "undefined" ? loadActiveQuestId() : null,
   quests: [],
   firstQuestJustCreated: false,
   isLoadingQuests: true,
@@ -209,12 +243,16 @@ export const createQuestSlice: StateCreator<
       }
     },
 
-    setActiveQuestId: (id) =>
+    setActiveQuestId: (id) => {
+      // Persist to localStorage for persistence across page reloads
+      saveActiveQuestId(id);
+      // Update state
       set(
         { activeQuestId: id },
         false,
         `quest/setActiveQuestId:${id ?? "null"}`,
-      ),
+      );
+    },
 
     setQuests: (questsFromServer) => {
       const mappedQuests = questsFromServer.map(mapDbQuestToClientQuest);
