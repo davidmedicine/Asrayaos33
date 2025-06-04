@@ -180,12 +180,17 @@ const CompassDPadDesktop: React.FC = () => {
     const [isTransitioning, setIsTransitioning] = useState(false);
     const navRef = useRef<HTMLElement>(null);
 
+    const handleTransitionStart = useCallback(() => {
+        setIsTransitioning(true);
+    }, []);
+
+    const handleTransitionEnd = useCallback(() => {
+        setIsTransitioning(false);
+    }, []);
+
     useEffect(() => {
         const node = navRef.current;
         if (!node) return;
-
-        const handleTransitionStart = () => setIsTransitioning(true);
-        const handleTransitionEnd = () => setIsTransitioning(false);
 
         // Assuming the transition is on 'inset-inline-start'
         node.addEventListener('transitionstart', handleTransitionStart);
@@ -197,7 +202,7 @@ const CompassDPadDesktop: React.FC = () => {
             node.removeEventListener('transitionend', handleTransitionEnd);
             node.removeEventListener('transitioncancel', handleTransitionEnd);
         };
-    }, []); // Run only once
+    }, [handleTransitionEnd, handleTransitionStart]);
 
 
     // --- Render ---
